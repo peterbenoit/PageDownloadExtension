@@ -12,28 +12,34 @@
 
 		// Images from <img> elements
 		document.querySelectorAll("img[src]").forEach((img) => {
+			const src = img.getAttribute("src");
+			const absoluteUrl = new URL(src, window.location.href).href;
 			resources.push({
-				url: img.src,
+				url: absoluteUrl,
 				type: "image",
-				filename: img.src.split('/').pop().split('?')[0]
+				filename: absoluteUrl.split('/').pop().split('?')[0]
 			});
 		});
 
 		// CSS files from <link rel="stylesheet"> elements
 		document.querySelectorAll("link[rel='stylesheet'][href]").forEach((linkEl) => {
+			const href = linkEl.getAttribute("href");
+			const absoluteUrl = new URL(href, window.location.href).href;
 			resources.push({
-				url: linkEl.href,
+				url: absoluteUrl,
 				type: "css",
-				filename: linkEl.href.split('/').pop().split('?')[0]
+				filename: absoluteUrl.split('/').pop().split('?')[0]
 			});
 		});
 
 		// JavaScript files from <script src=""> elements
 		document.querySelectorAll("script[src]").forEach((scriptEl) => {
+			const src = scriptEl.getAttribute("src");
+			const absoluteUrl = new URL(src, window.location.href).href;
 			resources.push({
-				url: scriptEl.src,
+				url: absoluteUrl,
 				type: "js",
-				filename: scriptEl.src.split('/').pop().split('?')[0]
+				filename: absoluteUrl.split('/').pop().split('?')[0]
 			});
 		});
 
@@ -43,10 +49,12 @@
 			const regex = /url\(["']?([^"')]+)["']?\)/g;
 			let match;
 			while ((match = regex.exec(styleAttr)) !== null) {
+				// Convert relative URL to absolute
+				const absoluteUrl = new URL(match[1], window.location.href).href;
 				resources.push({
-					url: match[1],
+					url: absoluteUrl,
 					type: "image",
-					filename: match[1].split('/').pop().split('?')[0]
+					filename: absoluteUrl.split('/').pop().split('?')[0]
 				});
 			}
 		});
@@ -57,10 +65,11 @@
 			const regex = /url\(["']?([^"')]+)["']?\)/g;
 			let match;
 			while ((match = regex.exec(cssText)) !== null) {
+				const absoluteUrl = new URL(match[1], window.location.href).href;
 				resources.push({
-					url: match[1],
+					url: absoluteUrl,
 					type: "image",
-					filename: match[1].split('/').pop().split('?')[0]
+					filename: absoluteUrl.split('/').pop().split('?')[0]
 				});
 			}
 		});

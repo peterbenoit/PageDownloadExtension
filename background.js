@@ -25,43 +25,53 @@ chrome.runtime.onMessage.addListener(async (message, sender) => {
 		// Create a folder for the domain in the zip archive
 		const domainFolder = zip.folder(domain);
 
-		// Add the starting page HTML
-		domainFolder.file("index.html", html);
+		// Modify the HTML before adding it to the zip
+		const modifiedHtml = modifyHTML(html);
+		domainFolder.file("index.html", modifiedHtml);
 
 		// Process and add each resource
 		for (const res of resources) {
-			// Allow CSS files regardless of domain; others only if hosted on the same domain
-			if (
-				res.type === "css" ||
-				(!res.url.startsWith("http") || new URL(res.url).hostname === domain)
-			) {
-				try {
-					const response = await fetch(res.url);
-					const blob = await response.blob();
-
-					let folderName;
-					if (res.type === "image") folderName = "images";
-					else if (res.type === "css") folderName = "css";
-					else if (res.type === "js") folderName = "js";
-					else folderName = "";
-
+			try {
+				// For CSS: allow regardless of domain.
+				if (res.type === "css") {
+					// Proceed with remote CSS as well.
 					let filename = res.filename || res.url.split('/').pop().split('?')[0];
-
-					// For CSS files, ensure the filename ends with ".css"
-					if (res.type === "css" && !filename.endsWith(".css")) {
+					if (!filename.endsWith(".css")) {
 						filename += ".css";
 					}
-
-					if (folderName) {
-						// Create subfolder if it doesn't exist and add file
-						const subFolder = domainFolder.folder(folderName);
-						subFolder.file(filename, blob);
-					} else {
-						domainFolder.file(filename, blob);
+					const response = await fetch(res.url);
+					const blob = await response.blob();
+					const subFolder = domainFolder.folder("css");
+					subFolder.file(filename, blob);
+				} else if (res.type === "js") {
+					// Only allow JS files that are from the same domain
+					// and whose filename ends with ".js".
+					if (res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
+						continue;
 					}
-				} catch (err) {
-					console.error(`Error downloading resource ${res.url}:`, err);
+					let filename = res.filename || res.url.split('/').pop().split('?')[0];
+					if (!filename.endsWith(".js")) {
+						// Skip any JS file that doesn't have a proper ".js" extension.
+						continue;
+					}
+					const response = await fetch(res.url);
+					const blob = await response.blob();
+					const subFolder = domainFolder.folder("js");
+					subFolder.file(filename, blob);
+				} else if (res.type === "image") {
+					// For images and any other resource, allow only if from same domain.
+					if (res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
+						continue;
+					}
+					let filename = res.filename || res.url.split('/').pop().split('?')[0];
+					const response = await fetch(res.url);
+					const blob = await response.blob();
+					const subFolder = domainFolder.folder("images");
+					subFolder.file(filename, blob);
 				}
+				// Add additional resource types here if needed.
+			} catch (err) {
+				console.error(`Error downloading resource ${res.url}:`, err);
 			}
 		}
 
@@ -99,4 +109,30 @@ function downloadURL(filename, url) {
 			console.error(chrome.runtime.lastError);
 		}
 	});
+}
+
+// Modifies the HTML string to update local references and strip analytics scripts
+function modifyHTML(html) {
+	// Replace remote Font Awesome stylesheet with local css/all.min.css
+	html = html.replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/font-awesome\/6\.4\.0\/css\/all\.min\.css/g, "css/all.min.css");
+
+	// Remove Clarity script tags
+	html = html.replace(/<script[^>]*src=["']https:\/\/www\.clarity\.ms\/[^<]+<\/script>/g, "");
+
+	// Remove gtag/Google Tag Manager script tags
+	html = html.replace(/<script[^>]*src=["']https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[^<]+<\/script>/g, "");
+
+	// Remove inline scripts that contain "gtag(" or "clarity("
+	html = html.replace(/<script[^>]*>[\s\S]*?(gtag\(|clarity\()[\s\S]*?<\/script>/g, "");
+
+	// Update background image paths in inline styles to point to the local images folder.
+	html = html.replace(/url\(["']?([^"')]+)["']?\)/g, function (match, p1) {
+		// For relative URLs (not starting with http), extract the filename
+		if (!p1.startsWith("http")) {
+			let filename = p1.split("/").pop();
+			return "url('images/" + filename + "')";
+		}
+		return match;
+	});
+	return html;
 }
