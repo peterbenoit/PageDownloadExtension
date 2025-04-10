@@ -17,76 +17,128 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 // Listen for messages from content script
-chrome.runtime.onMessage.addListener(async (message, sender) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message.type === 'PAGE_DATA') {
-		const { domain, html, resources } = message.data;
-
-		const zip = new JSZip();
-		// Create a folder for the domain in the zip archive
-		const domainFolder = zip.folder(domain);
-
-		// Modify the HTML before adding it to the zip
-		const modifiedHtml = modifyHTML(html);
-		domainFolder.file("index.html", modifiedHtml);
-
-		// Process and add each resource
-		for (const res of resources) {
-			try {
-				// For CSS: allow regardless of domain.
-				if (res.type === "css") {
-					// Proceed with remote CSS as well.
-					let filename = res.filename || res.url.split('/').pop().split('?')[0];
-					if (!filename.endsWith(".css")) {
-						filename += ".css";
-					}
-					const response = await fetch(res.url);
-					const blob = await response.blob();
-					const subFolder = domainFolder.folder("css");
-					subFolder.file(filename, blob);
-				} else if (res.type === "js") {
-					// Only allow JS files that are from the same domain
-					// and whose filename ends with ".js".
-					if (res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
-						continue;
-					}
-					let filename = res.filename || res.url.split('/').pop().split('?')[0];
-					if (!filename.endsWith(".js")) {
-						// Skip any JS file that doesn't have a proper ".js" extension.
-						continue;
-					}
-					const response = await fetch(res.url);
-					const blob = await response.blob();
-					const subFolder = domainFolder.folder("js");
-					subFolder.file(filename, blob);
-				} else if (res.type === "image") {
-					// For images and any other resource, allow only if from same domain.
-					if (res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
-						continue;
-					}
-					let filename = res.filename || res.url.split('/').pop().split('?')[0];
-					const response = await fetch(res.url);
-					const blob = await response.blob();
-					const subFolder = domainFolder.folder("images");
-					subFolder.file(filename, blob);
-				}
-				// Add additional resource types here if needed.
-			} catch (err) {
-				console.error(`Error downloading resource ${res.url}:`, err);
-			}
-		}
-
-		// Generate zip blob and trigger a single download prompt
-		zip.generateAsync({ type: "blob" })
-			.then(async (content) => {
-				const zipDataUrl = await blobToDataURL(content);
-				downloadURL(`${domain}.zip`, zipDataUrl);
-			})
-			.catch((err) => {
-				console.error("Error generating zip file:", err);
-			});
+		// Keep the messaging channel open
+		processPageData(message.data)
+			.then(() => sendResponse({ success: true }))
+			.catch(error => sendResponse({ success: false, error: error.message }));
+		return true; // Indicates async response
 	}
-	return true;
+	return false;
 });
+
+async function processPageData(data) {
+	const { domain, html, resources, url } = data;
+
+	const zip = new JSZip();
+	// Create a folder for the domain in the zip archive
+	const domainFolder = zip.folder(domain);
+
+	// Determine the HTML filename based on the URL
+	let htmlFilename = "index.html";
+	try {
+		const parsedUrl = new URL(url);
+		const pathname = parsedUrl.pathname;
+
+		// If pathname is more than just "/" and ends with .html, use that filename
+		if (pathname.length > 1 && pathname.endsWith('.html')) {
+			htmlFilename = pathname.split('/').pop();
+		}
+	} catch (error) {
+		console.warn("Couldn't parse URL, using index.html as default", error);
+	}
+
+	// Modify the HTML before adding it to the zip
+	const modifiedHtml = modifyHTML(html);
+	domainFolder.file(htmlFilename, modifiedHtml);
+
+	// Before processing resources
+	let processedCount = 0;
+	const totalResources = resources.length;
+
+	chrome.action.setBadgeText({ text: "0%" });
+	chrome.action.setBadgeBackgroundColor({ color: "#4688F1" });
+
+	const MAX_RESOURCE_SIZE_MB = 10;
+	const MAX_TOTAL_SIZE_MB = 100;
+	let totalSize = 0;
+
+	// Process and add each resource
+	for (const res of resources) {
+		try {
+			// Define resource types and their handling rules
+			const resourceTypes = {
+				css: { folder: "css", extension: ".css", sameDomainOnly: false },
+				js: { folder: "js", extension: ".js", sameDomainOnly: true },
+				image: { folder: "images", extension: null, sameDomainOnly: true },
+				font: { folder: "fonts", extension: null, sameDomainOnly: false },
+				video: { folder: "videos", extension: null, sameDomainOnly: true }
+			};
+
+			const type = resourceTypes[res.type];
+			if (!type) continue; // Skip unsupported resource types
+
+			// Check domain restriction
+			if (type.sameDomainOnly && res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
+				continue;
+			}
+
+			// Process filename
+			let filename = res.filename || res.url.split('/').pop().split('?')[0];
+			if (type.extension && !filename.endsWith(type.extension)) {
+				if (type.extension === ".js" || type.extension === ".css") {
+					if (type.extension === ".js") continue; // Skip non-JS files
+					filename += type.extension;
+				}
+			}
+
+			// Fetch and add to ZIP
+			const response = await fetch(res.url);
+			const blob = await response.blob();
+
+			// Check individual resource size
+			if (blob.size > MAX_RESOURCE_SIZE_MB * 1024 * 1024) {
+				console.warn(`Skipping ${res.url}: exceeds maximum resource size`);
+				continue;
+			}
+
+			// Track total size
+			totalSize += blob.size;
+			if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
+				console.warn(`Total size exceeds limit of ${MAX_TOTAL_SIZE_MB}MB`);
+				// Consider handling this situation - either stop or warn user
+			}
+
+			const subFolder = domainFolder.folder(type.folder);
+			subFolder.file(filename, blob);
+
+			// After each resource is processed
+			processedCount++;
+			const percentage = Math.round((processedCount / totalResources) * 100);
+			chrome.action.setBadgeText({ text: `${percentage}%` });
+
+		} catch (err) {
+			console.error(`Error downloading resource ${res.url}:`, err);
+		}
+	}
+
+	// Generate zip blob and trigger a single download prompt
+	zip.generateAsync({ type: "blob" })
+		.then((content) => {
+			const blobUrl = URL.createObjectURL(content);
+			downloadURL(`${domain}.zip`, blobUrl);
+			// Clean up the URL after download starts
+			setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+
+			// After ZIP generation is complete
+			chrome.action.setBadgeText({ text: "" });
+
+		})
+		.catch((err) => {
+			console.error("Error generating zip file:", err);
+		});
+}
 
 // Convert blob to data URL using FileReader
 function blobToDataURL(blob) {
@@ -113,26 +165,46 @@ function downloadURL(filename, url) {
 
 // Modifies the HTML string to update local references and strip analytics scripts
 function modifyHTML(html) {
-	// Replace remote Font Awesome stylesheet with local css/all.min.css
-	html = html.replace(/https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/font-awesome\/6\.4\.0\/css\/all\.min\.css/g, "css/all.min.css");
+	// Replace external CSS references with local paths
+	html = html.replace(/<link[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi, function (match, url) {
+		if (url.startsWith('http')) {
+			// Extract filename from URL
+			const filename = url.split('/').pop().split('?')[0];
+			return match.replace(url, `css/${filename}`);
+		}
+		return match;
+	});
 
-	// Remove Clarity script tags
-	html = html.replace(/<script[^>]*src=["']https:\/\/www\.clarity\.ms\/[^<]+<\/script>/g, "");
+	// Replace external JS references with local paths
+	html = html.replace(/<script[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi, function (match, url) {
+		// Skip analytics scripts
+		if (url.includes('googletagmanager.com') || url.includes('clarity.ms')) {
+			return '';
+		}
 
-	// Remove gtag/Google Tag Manager script tags
-	html = html.replace(/<script[^>]*src=["']https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[^<]+<\/script>/g, "");
+		if (url.startsWith('http')) {
+			// Extract filename from URL
+			const filename = url.split('/').pop().split('?')[0];
+			return match.replace(url, `js/${filename}`);
+		}
+		return match;
+	});
 
 	// Remove inline scripts that contain "gtag(" or "clarity("
 	html = html.replace(/<script[^>]*>[\s\S]*?(gtag\(|clarity\()[\s\S]*?<\/script>/g, "");
 
-	// Update background image paths in inline styles to point to the local images folder.
+	// Update background image paths in inline styles to point to the local images folder
 	html = html.replace(/url\(["']?([^"')]+)["']?\)/g, function (match, p1) {
 		// For relative URLs (not starting with http), extract the filename
 		if (!p1.startsWith("http")) {
 			let filename = p1.split("/").pop();
-			return "url('images/" + filename + "')";
+			return `url('images/${filename}')`;
+		} else {
+			// For absolute URLs, also extract filename and make reference local
+			let filename = p1.split("/").pop().split("?")[0];
+			return `url('images/${filename}')`;
 		}
-		return match;
 	});
+
 	return html;
 }
