@@ -30,8 +30,11 @@ chrome.runtime.onMessage.addListener(async (message, sender) => {
 
 		// Process and add each resource
 		for (const res of resources) {
-			// Only process resources hosted on the same domain
-			if (!res.url.startsWith("http") || new URL(res.url).hostname === domain) {
+			// Allow CSS files regardless of domain; others only if hosted on the same domain
+			if (
+				res.type === "css" ||
+				(!res.url.startsWith("http") || new URL(res.url).hostname === domain)
+			) {
 				try {
 					const response = await fetch(res.url);
 					const blob = await response.blob();
@@ -42,14 +45,17 @@ chrome.runtime.onMessage.addListener(async (message, sender) => {
 					else if (res.type === "js") folderName = "js";
 					else folderName = "";
 
-					let filename = res.filename || res.url.split('/').pop();
+					let filename = res.filename || res.url.split('/').pop().split('?')[0];
+
+					// For CSS files, ensure the filename ends with ".css"
+					if (res.type === "css" && !filename.endsWith(".css")) {
+						filename += ".css";
+					}
 
 					if (folderName) {
-						// Create subfolder if it doesn't exist
-						if (!domainFolder.folder(folderName)) {
-							domainFolder.folder(folderName);
-						}
-						domainFolder.folder(folderName).file(filename, blob);
+						// Create subfolder if it doesn't exist and add file
+						const subFolder = domainFolder.folder(folderName);
+						subFolder.file(filename, blob);
 					} else {
 						domainFolder.file(filename, blob);
 					}
