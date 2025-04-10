@@ -2,12 +2,11 @@
 
 ## Main functionality
 
--   When visiting a page and clicking the extension, the download should start silently without any progress UI or confirmation dialogue.
--   The extension should download the raw, unedited HTML of the starting page.
+-   When visiting a page and clicking the extension, download the raw, unedited HTML of the starting page along with its associated resources (images, CSS, JavaScript) silently as a single ZIP archive download.
 
-## Resource structure
+## Resource structure in the ZIP
 
--   All downloaded content should be organized under a folder named after the domain.
+-   The content should be organized under a folder named after the domain.
     -   For example, downloading from `domainA.com` should create a structure like:
         -   domainA.com/
             -   page.html
@@ -19,15 +18,13 @@
 
 -   Paths to resources should be fixed:
     -   The HTML file is saved as `page.html`
-    -   Images saved under `/images` folder
-    -   CSS files saved under `/css` folder
-    -   JavaScript files saved under `/js` folder
+    -   Images saved under the `/images` folder
+    -   CSS files saved under the `/css` folder
+    -   JavaScript files saved under the `/js` folder
 
 ## Handling linked pages
 
--   If there are any links on the page to another page on the same domain:
-    -   Only download pages that are directly linked (1-level deep from the starting page)
-    -   No recursive downloading of linked pages
+-   Do not download any linked pages from the current page.
 
 ## External resources
 

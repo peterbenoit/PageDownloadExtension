@@ -1,0 +1,20 @@
+{
+    "manifest_version": 3,
+    "name": "Page Downloader Extension",
+    "version": "1.0",
+    "description": "Download the current page and its resources as a single ZIP archive.",
+    "permissions": ["downloads", "activeTab", "scripting"],
+    "host_permissions": ["<all_urls>"],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "web_accessible_resources": [
+        {
+            "resources": ["jszip.min.js"],
+            "matches": ["<all_urls>"]
+        }
+    ],
+    "action": {
+        "default_title": "Download Page as ZIP"
+    }
+}
