@@ -3,7 +3,7 @@
     "name": "Page Downloader Extension",
     "version": "1.0",
     "description": "Download the current page and its resources as a single ZIP archive.",
-    "permissions": ["downloads", "activeTab", "scripting"],
+    "permissions": ["downloads", "activeTab", "scripting", "storage"],
     "host_permissions": ["<all_urls>"],
     "background": {
         "service_worker": "background.js"
@@ -15,6 +15,7 @@
         }
     ],
     "action": {
-        "default_title": "Download Page as ZIP"
+        "default_title": "Download Page as ZIP",
+        "default_popup": "popup.html"
     }
 }

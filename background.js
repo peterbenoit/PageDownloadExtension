@@ -69,8 +69,35 @@ async function processPageData(data, sender) {
 	chrome.action.setBadgeText({ text: "0%" });
 	chrome.action.setBadgeBackgroundColor({ color: "#4688F1" });
 
-	const MAX_RESOURCE_SIZE_MB = 30;
-	const MAX_TOTAL_SIZE_MB = 120;
+	let MAX_RESOURCE_SIZE_MB = 30;
+	let MAX_TOTAL_SIZE_MB = 120;
+
+	// Load settings at startup
+	function loadSettings() {
+		chrome.storage.sync.get({
+			maxResourceSize: 30,
+			maxTotalSize: 120
+		}, function (items) {
+			MAX_RESOURCE_SIZE_MB = items.maxResourceSize;
+			MAX_TOTAL_SIZE_MB = items.maxTotalSize;
+			console.log(`Settings loaded: Max Resource Size: ${MAX_RESOURCE_SIZE_MB}MB, Max Total Size: ${MAX_TOTAL_SIZE_MB}MB`);
+		});
+	}
+
+	// Listen for settings changes
+	chrome.storage.onChanged.addListener(function (changes) {
+		if (changes.maxResourceSize) {
+			MAX_RESOURCE_SIZE_MB = changes.maxResourceSize.newValue;
+		}
+		if (changes.maxTotalSize) {
+			MAX_TOTAL_SIZE_MB = changes.maxTotalSize.newValue;
+		}
+		console.log(`Settings updated: Max Resource Size: ${MAX_RESOURCE_SIZE_MB}MB, Max Total Size: ${MAX_TOTAL_SIZE_MB}MB`);
+	});
+
+	// Load settings at startup
+	loadSettings();
+
 	let totalSize = 0;
 
 	// Notify content script that download has started
