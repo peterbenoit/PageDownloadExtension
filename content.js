@@ -7,40 +7,58 @@
 		// Get the raw HTML of the page
 		const html = document.documentElement.outerHTML;
 
-		// Collect resource URLs from the page
-		const resources = [];
+		// Collect resource URLs from the page (using a Map to avoid duplicates)
+		const resourceMap = new Map(); // Use a Map to avoid duplicates by URL
+
+		// Helper function to add resource to our collection
+		function addResource(url, type) {
+			try {
+				// Skip empty URLs
+				if (!url) return;
+
+				// Handle data URLs - keep them for images
+				if (url.startsWith('data:') && type !== "image") return;
+
+				const absoluteUrl = new URL(url, window.location.href).href;
+
+				// Use URL as key to prevent duplicates
+				if (!resourceMap.has(absoluteUrl)) {
+					resourceMap.set(absoluteUrl, {
+						url: absoluteUrl,
+						type: type,
+						filename: url.startsWith('data:')
+							? `data-image-${resourceMap.size}.png`
+							: absoluteUrl.split('/').pop().split('?')[0]
+					});
+				}
+			} catch (e) {
+				console.warn(`Skipping invalid URL: ${url}`, e);
+			}
+		}
 
 		// Images from <img> elements
 		document.querySelectorAll("img[src]").forEach((img) => {
-			const src = img.getAttribute("src");
-			const absoluteUrl = new URL(src, window.location.href).href;
-			resources.push({
-				url: absoluteUrl,
-				type: "image",
-				filename: absoluteUrl.split('/').pop().split('?')[0]
-			});
+			addResource(img.getAttribute("src"), "image");
 		});
 
 		// CSS files from <link rel="stylesheet"> elements
 		document.querySelectorAll("link[rel='stylesheet'][href]").forEach((linkEl) => {
-			const href = linkEl.getAttribute("href");
-			const absoluteUrl = new URL(href, window.location.href).href;
-			resources.push({
-				url: absoluteUrl,
-				type: "css",
-				filename: absoluteUrl.split('/').pop().split('?')[0]
-			});
+			addResource(linkEl.getAttribute("href"), "css");
 		});
 
 		// JavaScript files from <script src=""> elements
 		document.querySelectorAll("script[src]").forEach((scriptEl) => {
-			const src = scriptEl.getAttribute("src");
-			const absoluteUrl = new URL(src, window.location.href).href;
-			resources.push({
-				url: absoluteUrl,
-				type: "js",
-				filename: absoluteUrl.split('/').pop().split('?')[0]
-			});
+			addResource(scriptEl.getAttribute("src"), "js");
+		});
+
+		// Font files from <link rel="preload"> with as="font"
+		document.querySelectorAll("link[rel='preload'][as='font'][href]").forEach((fontEl) => {
+			addResource(fontEl.getAttribute("href"), "font");
+		});
+
+		// Video sources
+		document.querySelectorAll("video source[src]").forEach((sourceEl) => {
+			addResource(sourceEl.getAttribute("src"), "video");
 		});
 
 		// Scan inline style attributes for url(...) references
@@ -49,13 +67,7 @@
 			const regex = /url\(["']?([^"')]+)["']?\)/g;
 			let match;
 			while ((match = regex.exec(styleAttr)) !== null) {
-				// Convert relative URL to absolute
-				const absoluteUrl = new URL(match[1], window.location.href).href;
-				resources.push({
-					url: absoluteUrl,
-					type: "image",
-					filename: absoluteUrl.split('/').pop().split('?')[0]
-				});
+				addResource(match[1], "image");
 			}
 		});
 
@@ -65,14 +77,12 @@
 			const regex = /url\(["']?([^"')]+)["']?\)/g;
 			let match;
 			while ((match = regex.exec(cssText)) !== null) {
-				const absoluteUrl = new URL(match[1], window.location.href).href;
-				resources.push({
-					url: absoluteUrl,
-					type: "image",
-					filename: absoluteUrl.split('/').pop().split('?')[0]
-				});
+				addResource(match[1], "image");
 			}
 		});
+
+		// Convert resourceMap to array of resources
+		const resources = [...resourceMap.values()];
 
 		// Send the collected data to the background script for processing
 		chrome.runtime.sendMessage({
@@ -80,7 +90,8 @@
 			data: {
 				domain: domain,
 				html: html,
-				resources: resources
+				resources: resources,
+				url: window.location.href // Include the current URL
 			}
 		});
 	} catch (err) {

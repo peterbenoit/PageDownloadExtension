@@ -93,6 +93,12 @@ async function processPageData(data) {
 				}
 			}
 
+			// In background.js where you process resources
+			if (type.folder === "images" && res.url.includes("/img/")) {
+				// Handle img folder references to map to images folder
+				filename = res.url.split('/').pop().split('?')[0];
+			}
+
 			// Fetch and add to ZIP
 			const response = await fetch(res.url);
 			const blob = await response.blob();
@@ -125,15 +131,16 @@ async function processPageData(data) {
 
 	// Generate zip blob and trigger a single download prompt
 	zip.generateAsync({ type: "blob" })
-		.then((content) => {
-			const blobUrl = URL.createObjectURL(content);
-			downloadURL(`${domain}.zip`, blobUrl);
-			// Clean up the URL after download starts
-			setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+		.then(async (content) => {
+			try {
+				const dataUrl = await blobToDataURL(content);
+				downloadURL(`${domain}.zip`, dataUrl);
 
-			// After ZIP generation is complete
-			chrome.action.setBadgeText({ text: "" });
-
+				// After ZIP generation is complete
+				chrome.action.setBadgeText({ text: "" });
+			} catch (err) {
+				console.error("Error creating data URL:", err);
+			}
 		})
 		.catch((err) => {
 			console.error("Error generating zip file:", err);
@@ -204,6 +211,16 @@ function modifyHTML(html) {
 			let filename = p1.split("/").pop().split("?")[0];
 			return `url('images/${filename}')`;
 		}
+	});
+
+	// Replace image src paths
+	html = html.replace(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi, function (match, url) {
+		// Skip data URLs
+		if (url.startsWith('data:')) return match;
+
+		// Extract filename from URL
+		const filename = url.split('/').pop().split('?')[0];
+		return match.replace(url, `images/${filename}`);
 	});
 
 	return html;
