@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	const saveButton = document.getElementById('saveButton');
 	const resetButton = document.getElementById('resetButton');
 	const statusMessage = document.getElementById('statusMessage');
+	const downloadButton = document.getElementById('downloadButton');
 
 	const DEFAULT_MAX_RESOURCE_SIZE = 30;
 	const DEFAULT_MAX_TOTAL_SIZE = 120;
@@ -15,6 +16,31 @@ document.addEventListener('DOMContentLoaded', function () {
 	}, function (items) {
 		maxResourceSizeInput.value = items.maxResourceSize;
 		maxTotalSizeInput.value = items.maxTotalSize;
+	});
+
+	// Handle the download button click
+	downloadButton.addEventListener('click', function () {
+		// Get the active tab and trigger the download process
+		chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+			if (tabs && tabs[0] && tabs[0].id) {
+				const tabId = tabs[0].id;
+
+				// Execute the content script to start the download
+				chrome.scripting.executeScript({
+					target: { tabId: tabId },
+					files: ['content.js']
+				}, () => {
+					if (chrome.runtime.lastError) {
+						console.error(chrome.runtime.lastError);
+						statusMessage.textContent = 'Error: ' + chrome.runtime.lastError.message;
+						statusMessage.style.color = '#F44336';
+					} else {
+						// Close the popup after triggering download
+						window.close();
+					}
+				});
+			}
+		});
 	});
 
 	// Save settings

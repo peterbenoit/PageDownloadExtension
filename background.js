@@ -1,21 +1,6 @@
 // Include JSZip (ensure jszip.min.js is added to your extension folder)
 importScripts('jszip.min.js');
 
-// Listen for a click on the extension action
-chrome.action.onClicked.addListener((tab) => {
-	if (!tab.id) return;
-
-	// Execute content script in the active tab
-	chrome.scripting.executeScript({
-		target: { tabId: tab.id },
-		files: ['content.js']
-	}, () => {
-		if (chrome.runtime.lastError) {
-			console.error(chrome.runtime.lastError);
-		}
-	});
-});
-
 // Update the message listener to capture sender
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message.type === 'PAGE_DATA') {
@@ -32,6 +17,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 function proxyConsole(tabId, method, message) {
 	console[method](message);
 	chrome.tabs.sendMessage(tabId, { type: 'LOG', level: method, message: message });
+}
+
+// Add this function to send file status updates to the content script
+function updateFileStatus(tabId, url, status, reason = null) {
+	chrome.tabs.sendMessage(tabId, {
+		type: 'FILE_STATUS',
+		url: url,
+		status: status, // 'success', 'skipped', or 'failed'
+		reason: reason  // Optional explanation message
+	});
 }
 
 // Update function signature to accept sender
@@ -121,6 +116,7 @@ async function processPageData(data, sender) {
 			// Check domain restriction
 			if (type.sameDomainOnly && res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
 				proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
+				updateFileStatus(tabId, res.url, 'skipped', 'Cross-domain resource');
 				continue;
 			}
 
@@ -162,6 +158,7 @@ async function processPageData(data, sender) {
 				// Check individual resource size
 				if (blob.size > MAX_RESOURCE_SIZE_MB * 1024 * 1024) {
 					proxyConsole(tabId, 'warn', `Skipping ${res.url}: exceeds maximum resource size`);
+					updateFileStatus(tabId, res.url, 'skipped', `Exceeds max size limit (${MAX_RESOURCE_SIZE_MB}MB)`);
 					continue;
 				}
 
@@ -174,10 +171,12 @@ async function processPageData(data, sender) {
 				const subFolder = domainFolder.folder(type.folder);
 				subFolder.file(filename, blob);
 				proxyConsole(tabId, 'log', `Successfully added to ZIP: ${filename}`);
+				updateFileStatus(tabId, res.url, 'success');
 
 			} catch (fetchError) {
 				clearTimeout(timeoutId);
 				proxyConsole(tabId, 'error', `Failed to fetch ${res.url}: ${fetchError.message}`);
+				updateFileStatus(tabId, res.url, 'failed', fetchError.message);
 				continue;
 			}
 

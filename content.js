@@ -6,17 +6,61 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            background-color: rgba(0, 0, 0, 0.8);
+            background-color: rgba(33, 33, 33, 0.95);
             color: white;
             padding: 10px 20px;
             border-radius: 5px;
             z-index: 10000;
             font-family: Arial, sans-serif;
             display: none;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
             transition: opacity 0.3s ease-in-out;
+            max-width: 400px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
         `;
 
+		// Header section with title and close button
+		const header = document.createElement('div');
+		header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 8px;
+        `;
+
+		const title = document.createElement('div');
+		title.textContent = 'Page Download';
+		title.style.fontWeight = 'bold';
+
+		const closeBtn = document.createElement('button');
+		closeBtn.innerHTML = '&times;';
+		closeBtn.style.cssText = `
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0 5px;
+        `;
+		closeBtn.onclick = () => {
+			hideToast();
+		};
+
+		header.appendChild(title);
+		header.appendChild(closeBtn);
+		toast.appendChild(header);
+
+		// Status message
+		const statusMsg = document.createElement('div');
+		statusMsg.id = 'page-download-status';
+		statusMsg.textContent = 'Downloading page: 0%';
+		toast.appendChild(statusMsg);
+
+		// Progress bar
 		const progressBar = document.createElement('div');
 		progressBar.id = 'page-download-progress-bar';
 		progressBar.style.cssText = `
@@ -24,6 +68,7 @@
             background-color: #444;
             height: 5px;
             margin-top: 8px;
+            margin-bottom: 12px;
             border-radius: 5px;
             overflow: hidden;
         `;
@@ -38,9 +83,53 @@
         `;
 
 		progressBar.appendChild(progressFill);
-		toast.appendChild(document.createTextNode('Downloading page: 0%'));
 		toast.appendChild(progressBar);
 
+		// File status container with scrolling
+		const fileStatusContainer = document.createElement('div');
+		fileStatusContainer.id = 'file-status-container';
+		fileStatusContainer.style.cssText = `
+            max-height: 250px;
+            overflow-y: auto;
+            margin-top: 10px;
+            font-size: 12px;
+            display: none;
+        `;
+
+		// Create sections for each file status category
+		const categories = ['success', 'skipped', 'failed'];
+		categories.forEach(category => {
+			const section = document.createElement('div');
+			section.id = `${category}-files`;
+			section.style.cssText = `
+                margin-bottom: 10px;
+                display: none;
+            `;
+
+			const heading = document.createElement('div');
+			heading.style.cssText = `
+                font-weight: bold;
+                margin-bottom: 5px;
+                color: ${category === 'success' ? '#4CAF50' : category === 'skipped' ? '#FFC107' : '#F44336'};
+            `;
+
+			heading.textContent = category === 'success' ? 'Downloaded Files:' :
+				category === 'skipped' ? 'Skipped Files:' : 'Failed Files:';
+
+			const list = document.createElement('ul');
+			list.id = `${category}-list`;
+			list.style.cssText = `
+                list-style-type: none;
+                padding-left: 0;
+                margin: 0;
+            `;
+
+			section.appendChild(heading);
+			section.appendChild(list);
+			fileStatusContainer.appendChild(section);
+		});
+
+		toast.appendChild(fileStatusContainer);
 		document.body.appendChild(toast);
 		return toast;
 	}
@@ -54,6 +143,9 @@
 			completeToast(message.filename);
 		} else if (message.type === 'DOWNLOAD_STARTED') {
 			showToast();
+		} else if (message.type === 'FILE_STATUS') {
+			// New message type for file status
+			addFileStatus(message.url, message.status, message.reason);
 		} else if (message.type === 'LOG') {
 			// Log background messages in the page console
 			if (message.level && console[message.level]) {
@@ -67,15 +159,50 @@
 	function showToast() {
 		const toast = document.getElementById('page-download-toast');
 		if (toast) {
-			toast.style.display = 'block';
+			// Reset file status data when starting a new download
+			document.getElementById('success-list').innerHTML = '';
+			document.getElementById('skipped-list').innerHTML = '';
+			document.getElementById('failed-list').innerHTML = '';
+
+			document.getElementById('success-files').style.display = 'none';
+			document.getElementById('skipped-files').style.display = 'none';
+			document.getElementById('failed-files').style.display = 'none';
+			document.getElementById('file-status-container').style.display = 'none';
+
+			const statusMsg = document.getElementById('page-download-status');
+			statusMsg.textContent = 'Downloading page: 0%';
+
+			const progressFill = document.getElementById('page-download-progress-fill');
+			if (progressFill) {
+				progressFill.style.width = '0%';
+				progressFill.style.backgroundColor = '#4688F1';
+			}
+
+			toast.style.display = 'flex';
 			toast.style.opacity = '1';
+		} else {
+			// Create toast if it doesn't exist
+			createToastElement();
+			showToast();
+		}
+	}
+
+	function hideToast() {
+		const toast = document.getElementById('page-download-toast');
+		if (toast) {
+			toast.style.opacity = '0';
+			setTimeout(() => {
+				toast.style.display = 'none';
+			}, 300);
 		}
 	}
 
 	function updateToast(percentage) {
 		const toast = document.getElementById('page-download-toast');
 		if (toast) {
-			toast.firstChild.nodeValue = `Downloading page: ${percentage}%`;
+			const statusMsg = document.getElementById('page-download-status');
+			statusMsg.textContent = `Downloading page: ${percentage}%`;
+
 			const progressFill = document.getElementById('page-download-progress-fill');
 			if (progressFill) {
 				progressFill.style.width = `${percentage}%`;
@@ -86,20 +213,83 @@
 	function completeToast(filename) {
 		const toast = document.getElementById('page-download-toast');
 		if (toast) {
-			toast.firstChild.nodeValue = `Download complete: ${filename}`;
+			const statusMsg = document.getElementById('page-download-status');
+			statusMsg.textContent = `Download complete: ${filename}`;
+
 			const progressFill = document.getElementById('page-download-progress-fill');
 			if (progressFill) {
 				progressFill.style.width = '100%';
 				progressFill.style.backgroundColor = '#4CAF50';
 			}
 
-			setTimeout(() => {
-				toast.style.opacity = '0';
-				setTimeout(() => {
-					toast.style.display = 'none';
-				}, 300);
-			}, 3000);
+			// Show file status section if we have any file statuses
+			const fileContainer = document.getElementById('file-status-container');
+			if (fileContainer && (
+				document.getElementById('success-list').children.length > 0 ||
+				document.getElementById('skipped-list').children.length > 0 ||
+				document.getElementById('failed-list').children.length > 0
+			)) {
+				fileContainer.style.display = 'block';
+			}
+
+			// Don't auto-hide toast anymore - user must close manually
 		}
+	}
+
+	function addFileStatus(url, status, reason) {
+		const toast = document.getElementById('page-download-toast');
+		if (!toast) return;
+
+		const listId = `${status}-list`;
+		const list = document.getElementById(listId);
+		if (!list) return;
+
+		// Make sure the category container is visible
+		document.getElementById(`${status}-files`).style.display = 'block';
+		document.getElementById('file-status-container').style.display = 'block';
+
+		// Create list item for the file
+		const item = document.createElement('li');
+		item.style.cssText = `
+            margin-bottom: 3px;
+            display: flex;
+            align-items: flex-start;
+        `;
+
+		// Status icon
+		const icon = document.createElement('span');
+		icon.style.cssText = `
+            margin-right: 5px;
+            font-weight: bold;
+        `;
+
+		if (status === 'success') {
+			icon.innerHTML = '✓';
+			icon.style.color = '#4CAF50';
+		} else if (status === 'skipped') {
+			icon.innerHTML = '⚠️';
+			icon.style.color = '#FFC107';
+		} else {
+			icon.innerHTML = '✗';
+			icon.style.color = '#F44336';
+		}
+
+		// Get filename from URL
+		const filename = url.split('/').pop().split('?')[0];
+		let displayName = filename.length > 30 ? filename.substring(0, 27) + '...' : filename;
+
+		const fileInfo = document.createElement('div');
+		fileInfo.style.wordBreak = 'break-word';
+
+		if (reason) {
+			fileInfo.innerHTML = `<span title="${url}">${displayName}</span><br><small>${reason}</small>`;
+		} else {
+			fileInfo.innerHTML = `<span title="${url}">${displayName}</span>`;
+		}
+
+		item.appendChild(icon);
+		item.appendChild(fileInfo);
+		list.appendChild(item);
 	}
 
 	try {

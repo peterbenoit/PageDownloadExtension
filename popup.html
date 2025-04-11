@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>Page Download Settings</title>
+        <title>Page Download Extension</title>
         <style>
             body {
                 font-family: Arial, sans-serif;
@@ -36,9 +36,22 @@
                 border: none;
                 border-radius: 4px;
                 cursor: pointer;
+                margin-left: 5px;
             }
             button:hover {
                 background-color: #3b78e7;
+            }
+            .download-btn {
+                background-color: #4caf50;
+                font-weight: bold;
+                margin-bottom: 20px;
+                display: block;
+                width: 100%;
+                padding: 10px;
+                font-size: 14px;
+            }
+            .download-btn:hover {
+                background-color: #45a049;
             }
             .status {
                 color: #4caf50;
@@ -46,10 +59,15 @@
                 height: 15px;
                 margin-top: 10px;
             }
+            h2 {
+                margin-top: 0;
+            }
         </style>
     </head>
     <body>
-        <h2>Page Download Settings</h2>
+        <button id="downloadButton" class="download-btn">Download This Page</button>
+
+        <h2>Settings</h2>
 
         <div class="setting-group">
             <label for="maxResourceSize">Maximum individual resource size (MB):</label>
