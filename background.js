@@ -87,6 +87,7 @@ async function processPageData(data, sender) {
 
 			// Check domain restriction
 			if (type.sameDomainOnly && res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
+				console.warn(`Skipping cross-domain resource: ${res.url}`);
 				continue;
 			}
 
@@ -99,33 +100,55 @@ async function processPageData(data, sender) {
 				}
 			}
 
-			// In background.js where you process resources
-			if (type.folder === "images" && res.url.includes("/img/")) {
-				// Handle img folder references to map to images folder
+			// Handle img folder references to map to images folder
+			if (type.folder === "images" && (res.url.includes("/img/") || res.url.includes("/images/"))) {
 				filename = res.url.split('/').pop().split('?')[0];
 			}
 
-			// Fetch and add to ZIP
-			const response = await fetch(res.url);
-			const blob = await response.blob();
+			console.log(`Fetching resource: ${res.url} → ${filename}`);
 
-			// Check individual resource size
-			if (blob.size > MAX_RESOURCE_SIZE_MB * 1024 * 1024) {
-				console.warn(`Skipping ${res.url}: exceeds maximum resource size`);
+			// IMPROVED: More robust fetch with timeout and error handling
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+			try {
+				const response = await fetch(res.url, {
+					signal: controller.signal,
+					credentials: 'omit', // Don't send cookies
+					cache: 'force-cache' // Try to use cache when possible
+				});
+
+				clearTimeout(timeoutId);
+
+				if (!response.ok) {
+					throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+				}
+
+				const blob = await response.blob();
+
+				// Check individual resource size
+				if (blob.size > MAX_RESOURCE_SIZE_MB * 1024 * 1024) {
+					console.warn(`Skipping ${res.url}: exceeds maximum resource size`);
+					continue;
+				}
+
+				// Track total size
+				totalSize += blob.size;
+				if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
+					console.warn(`Total size exceeds limit of ${MAX_TOTAL_SIZE_MB}MB`);
+				}
+
+				const subFolder = domainFolder.folder(type.folder);
+				subFolder.file(filename, blob);
+				console.log(`Successfully added to ZIP: ${filename}`);
+
+			} catch (fetchError) {
+				clearTimeout(timeoutId);
+				console.error(`Failed to fetch ${res.url}: ${fetchError.message}`);
 				continue;
 			}
 
-			// Track total size
-			totalSize += blob.size;
-			if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
-				console.warn(`Total size exceeds limit of ${MAX_TOTAL_SIZE_MB}MB`);
-				// Consider handling this situation - either stop or warn user
-			}
-
-			const subFolder = domainFolder.folder(type.folder);
-			subFolder.file(filename, blob);
-
-			// After each resource is processed
+			// Update progress after each resource
 			processedCount++;
 			const percentage = Math.round((processedCount / totalResources) * 100);
 			chrome.action.setBadgeText({ text: `${percentage}%` });
@@ -137,7 +160,7 @@ async function processPageData(data, sender) {
 			});
 
 		} catch (err) {
-			console.error(`Error downloading resource ${res.url}:`, err);
+			console.error(`Error processing resource ${res.url}:`, err);
 		}
 	}
 

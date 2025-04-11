@@ -109,13 +109,16 @@
 
 				if (url.startsWith('data:') && type !== "image") return;
 
-				const absoluteUrl = new URL(url, window.location.href).href;
+				// Remove quotes from URL if present
+				const cleanUrl = url.replace(/^['"](.*)['"]$/, '$1');
+
+				const absoluteUrl = new URL(cleanUrl, window.location.href).href;
 
 				if (!resourceMap.has(absoluteUrl)) {
 					resourceMap.set(absoluteUrl, {
 						url: absoluteUrl,
 						type: type,
-						filename: url.startsWith('data:')
+						filename: cleanUrl.startsWith('data:')
 							? `data-image-${resourceMap.size}.png`
 							: absoluteUrl.split('/').pop().split('?')[0]
 					});
@@ -125,45 +128,59 @@
 			}
 		}
 
+		// Process img tags
 		document.querySelectorAll("img[src]").forEach((img) => {
 			addResource(img.getAttribute("src"), "image");
 		});
 
+		// Process stylesheets
 		document.querySelectorAll("link[rel='stylesheet'][href]").forEach((linkEl) => {
 			addResource(linkEl.getAttribute("href"), "css");
 		});
 
+		// Process scripts
 		document.querySelectorAll("script[src]").forEach((scriptEl) => {
 			addResource(scriptEl.getAttribute("src"), "js");
 		});
 
+		// Process fonts
 		document.querySelectorAll("link[rel='preload'][as='font'][href]").forEach((fontEl) => {
 			addResource(fontEl.getAttribute("href"), "font");
 		});
 
+		// Process videos
 		document.querySelectorAll("video source[src]").forEach((sourceEl) => {
 			addResource(sourceEl.getAttribute("src"), "video");
 		});
 
+		// IMPROVED: Extract background images from inline styles with more robust regex
 		document.querySelectorAll("[style]").forEach((el) => {
 			const styleAttr = el.getAttribute("style");
-			const regex = /url\(["']?([^"')]+)["']?\)/g;
+			// More flexible regex that handles spaces and various quoting styles
+			const regex = /url\s*\(\s*(['"]?)([^"')]+)\1\s*\)/gi;
 			let match;
 			while ((match = regex.exec(styleAttr)) !== null) {
-				addResource(match[1], "image");
+				addResource(match[2], "image");
 			}
 		});
 
+		// IMPROVED: Extract background images from style elements
 		document.querySelectorAll("style").forEach((styleEl) => {
-			const cssText = styleEl.innerText;
-			const regex = /url\(["']?([^"')]+)["']?\)/g;
+			const cssText = styleEl.textContent; // Using textContent instead of innerText
+			const regex = /url\s*\(\s*(['"]?)([^"')]+)\1\s*\)/gi;
 			let match;
 			while ((match = regex.exec(cssText)) !== null) {
-				addResource(match[1], "image");
+				addResource(match[2], "image");
 			}
 		});
 
 		const resources = [...resourceMap.values()];
+
+		console.log("Resources found:", resources);
+		console.log("HTML content:", html);
+		console.log("Domain:", domain);
+		console.log("Page URL:", window.location.href);
+		console.log("Sending data to background script...");
 
 		chrome.runtime.sendMessage({
 			type: "PAGE_DATA",
