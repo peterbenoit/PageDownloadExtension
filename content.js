@@ -2,6 +2,8 @@
 	function createToastElement() {
 		const toast = document.createElement('div');
 		toast.id = 'page-download-toast';
+		toast.setAttribute('role', 'alert');
+		toast.setAttribute('aria-live', 'assertive');
 		toast.style.cssText = `
             position: fixed;
             top: 20px;
@@ -20,6 +22,23 @@
             display: flex;
             flex-direction: column;
         `;
+
+		// sr-only class for screen readers
+		const sronly = document.createElement('style');
+		sronly.textContent = `
+            .sr-only {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                padding: 0;
+                margin: -1px;
+                overflow: hidden;
+                clip: rect(0, 0, 0, 0);
+                white-space: nowrap;
+                border-width: 0;
+            }
+        `;
+		document.head.appendChild(sronly);
 
 		// Header section with title and close button
 		const header = document.createElement('div');
@@ -131,6 +150,26 @@
 
 		toast.appendChild(fileStatusContainer);
 		document.body.appendChild(toast);
+
+		const focusableElements = toast.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+		const firstElement = focusableElements[0];
+		const lastElement = focusableElements[focusableElements.length - 1];
+
+		// Trap focus in modal
+		toast.addEventListener('keydown', function (e) {
+			if (e.key === 'Tab') {
+				if (e.shiftKey && document.activeElement === firstElement) {
+					e.preventDefault();
+					lastElement.focus();
+				} else if (!e.shiftKey && document.activeElement === lastElement) {
+					e.preventDefault();
+					firstElement.focus();
+				}
+			} else if (e.key === 'Escape') {
+				hideToast();
+			}
+		});
+
 		return toast;
 	}
 
@@ -251,40 +290,92 @@
 		// Create list item for the file
 		const item = document.createElement('li');
 		item.style.cssText = `
-            margin-bottom: 3px;
-            display: flex;
-            align-items: flex-start;
-        `;
+			margin-bottom: 3px;
+			display: flex;
+			align-items: flex-start;
+		`;
 
 		// Status icon
 		const icon = document.createElement('span');
 		icon.style.cssText = `
-            margin-right: 5px;
-            font-weight: bold;
-        `;
+			margin-right: 5px;
+			font-weight: bold;
+		`;
 
-		if (status === 'success') {
-			icon.innerHTML = '✓';
-			icon.style.color = '#4CAF50';
-		} else if (status === 'skipped') {
-			icon.innerHTML = '⚠️';
-			icon.style.color = '#FFC107';
-		} else {
-			icon.innerHTML = '✗';
-			icon.style.color = '#F44336';
-		}
-
-		// Get filename from URL
+		// Get filename from URL first
 		const filename = url.split('/').pop().split('?')[0];
 		let displayName = filename.length > 30 ? filename.substring(0, 27) + '...' : filename;
 
+		// Create fileInfo element before using it
 		const fileInfo = document.createElement('div');
 		fileInfo.style.wordBreak = 'break-word';
 
-		if (reason) {
-			fileInfo.innerHTML = `<span title="${url}">${displayName}</span><br><small>${reason}</small>`;
+		if (status === 'success') {
+			icon.innerHTML = '✓';
+			icon.setAttribute('aria-hidden', 'true');
+			icon.style.color = '#4CAF50';
+
+			const srSpan = document.createElement('span');
+			srSpan.textContent = 'Success: ';
+			srSpan.className = 'sr-only';
+
+			const titleSpan = document.createElement('span');
+			titleSpan.setAttribute('title', url);
+			titleSpan.textContent = displayName;
+
+			fileInfo.appendChild(srSpan);
+			fileInfo.appendChild(titleSpan);
+
+			if (reason) {
+				fileInfo.appendChild(document.createElement('br'));
+				const small = document.createElement('small');
+				small.textContent = reason;
+				fileInfo.appendChild(small);
+			}
+		} else if (status === 'skipped') {
+			icon.innerHTML = '⚠️';
+			icon.setAttribute('aria-hidden', 'true');
+			icon.style.color = '#FFC107';
+
+			const srSpan = document.createElement('span');
+			srSpan.textContent = 'Skipped: ';
+			srSpan.className = 'sr-only';
+
+			const titleSpan = document.createElement('span');
+			titleSpan.setAttribute('title', url);
+			titleSpan.textContent = displayName;
+
+			fileInfo.appendChild(srSpan);
+			fileInfo.appendChild(titleSpan);
+
+			if (reason) {
+				fileInfo.appendChild(document.createElement('br'));
+				const small = document.createElement('small');
+				small.textContent = reason;
+				fileInfo.appendChild(small);
+			}
 		} else {
-			fileInfo.innerHTML = `<span title="${url}">${displayName}</span>`;
+			icon.innerHTML = '✗';
+			icon.setAttribute('aria-hidden', 'true');
+			icon.style.color = '#F44336';
+
+			const srSpan = document.createElement('span');
+			srSpan.textContent = 'Failed: ';
+			srSpan.className = 'sr-only';
+
+			const titleSpan = document.createElement('span');
+			titleSpan.setAttribute('title', url);
+			titleSpan.textContent = displayName;
+
+			fileInfo.appendChild(srSpan);
+			fileInfo.appendChild(titleSpan);
+
+			if (reason) {
+				fileInfo.appendChild(document.createElement('br'));
+				const small = document.createElement('small');
+				small.textContent = reason;
+				fileInfo.appendChild(small);
+			}
 		}
 
 		item.appendChild(icon);

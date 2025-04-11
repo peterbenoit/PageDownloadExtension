@@ -8,9 +8,9 @@
                 --bg-secondary: #3a455a; /* Slightly lighter background */
                 --text-primary: #f8f9fa; /* White text for contrast */
                 --text-secondary: #d0d6e0; /* Light blue-gray for secondary text */
-                --accent-green: #aad8b0; /* Dark green from icon */
+                --accent-green: #75b87e; /* Darker, higher-contrast green */
                 --accent-light: #dcf0e6; /* Light green from icon */
-                --accent-blue: #697e9b; /* Dark blue-gray from icon */
+                --accent-blue: #4d6384; /* Darker blue for better contrast */
                 --accent-hover: #8fc196; /* Darker version of accent green */
                 --border-radius: 6px;
             }
@@ -162,12 +162,25 @@
                 margin-top: 12px;
                 text-align: center;
             }
+
+            button:focus,
+            input:focus {
+                outline: 2px solid #ffffff;
+                outline-offset: 2px;
+                box-shadow: 0 0 0 2px var(--accent-blue);
+            }
         </style>
     </head>
     <body>
         <div class="header">
             <button id="downloadButton" class="download-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                    focusable="false"
+                >
                     <path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-6 2h12v2H6v-2z" />
                 </svg>
                 Download This Page
@@ -179,10 +192,16 @@
 
             <div class="setting-group">
                 <label for="maxResourceSize">Maximum individual resource size (MB):</label>
-                <div class="description">
+                <input
+                    type="number"
+                    id="maxResourceSize"
+                    min="1"
+                    max="100"
+                    aria-describedby="resourceSize-desc"
+                />
+                <div id="resourceSize-desc" class="description">
                     Maximum size for any single file (images, scripts, etc.) to download
                 </div>
-                <input type="number" id="maxResourceSize" min="1" max="100" />
             </div>
 
             <div class="setting-group">
