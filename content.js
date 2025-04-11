@@ -1,27 +1,116 @@
 (function () {
+	function createToastElement() {
+		const toast = document.createElement('div');
+		toast.id = 'page-download-toast';
+		toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 10000;
+            font-family: Arial, sans-serif;
+            display: none;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: opacity 0.3s ease-in-out;
+        `;
+
+		const progressBar = document.createElement('div');
+		progressBar.id = 'page-download-progress-bar';
+		progressBar.style.cssText = `
+            width: 100%;
+            background-color: #444;
+            height: 5px;
+            margin-top: 8px;
+            border-radius: 5px;
+            overflow: hidden;
+        `;
+
+		const progressFill = document.createElement('div');
+		progressFill.id = 'page-download-progress-fill';
+		progressFill.style.cssText = `
+            height: 100%;
+            background-color: #4688F1;
+            width: 0%;
+            transition: width 0.3s ease;
+        `;
+
+		progressBar.appendChild(progressFill);
+		toast.appendChild(document.createTextNode('Downloading page: 0%'));
+		toast.appendChild(progressBar);
+
+		document.body.appendChild(toast);
+		return toast;
+	}
+
+	createToastElement();
+
+	chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+		if (message.type === 'DOWNLOAD_PROGRESS') {
+			updateToast(message.percentage);
+		} else if (message.type === 'DOWNLOAD_COMPLETE') {
+			completeToast(message.filename);
+		} else if (message.type === 'DOWNLOAD_STARTED') {
+			showToast();
+		}
+	});
+
+	function showToast() {
+		const toast = document.getElementById('page-download-toast');
+		if (toast) {
+			toast.style.display = 'block';
+			toast.style.opacity = '1';
+		}
+	}
+
+	function updateToast(percentage) {
+		const toast = document.getElementById('page-download-toast');
+		if (toast) {
+			toast.firstChild.nodeValue = `Downloading page: ${percentage}%`;
+			const progressFill = document.getElementById('page-download-progress-fill');
+			if (progressFill) {
+				progressFill.style.width = `${percentage}%`;
+			}
+		}
+	}
+
+	function completeToast(filename) {
+		const toast = document.getElementById('page-download-toast');
+		if (toast) {
+			toast.firstChild.nodeValue = `Download complete: ${filename}`;
+			const progressFill = document.getElementById('page-download-progress-fill');
+			if (progressFill) {
+				progressFill.style.width = '100%';
+				progressFill.style.backgroundColor = '#4CAF50';
+			}
+
+			setTimeout(() => {
+				toast.style.opacity = '0';
+				setTimeout(() => {
+					toast.style.display = 'none';
+				}, 300);
+			}, 3000);
+		}
+	}
+
 	try {
-		// Get domain (without "www." if exists)
 		const domainRaw = window.location.hostname;
 		const domain = domainRaw.replace(/^www\./, '');
 
-		// Get the raw HTML of the page
 		const html = document.documentElement.outerHTML;
 
-		// Collect resource URLs from the page (using a Map to avoid duplicates)
-		const resourceMap = new Map(); // Use a Map to avoid duplicates by URL
+		const resourceMap = new Map();
 
-		// Helper function to add resource to our collection
 		function addResource(url, type) {
 			try {
-				// Skip empty URLs
 				if (!url) return;
 
-				// Handle data URLs - keep them for images
 				if (url.startsWith('data:') && type !== "image") return;
 
 				const absoluteUrl = new URL(url, window.location.href).href;
 
-				// Use URL as key to prevent duplicates
 				if (!resourceMap.has(absoluteUrl)) {
 					resourceMap.set(absoluteUrl, {
 						url: absoluteUrl,
@@ -36,32 +125,26 @@
 			}
 		}
 
-		// Images from <img> elements
 		document.querySelectorAll("img[src]").forEach((img) => {
 			addResource(img.getAttribute("src"), "image");
 		});
 
-		// CSS files from <link rel="stylesheet"> elements
 		document.querySelectorAll("link[rel='stylesheet'][href]").forEach((linkEl) => {
 			addResource(linkEl.getAttribute("href"), "css");
 		});
 
-		// JavaScript files from <script src=""> elements
 		document.querySelectorAll("script[src]").forEach((scriptEl) => {
 			addResource(scriptEl.getAttribute("src"), "js");
 		});
 
-		// Font files from <link rel="preload"> with as="font"
 		document.querySelectorAll("link[rel='preload'][as='font'][href]").forEach((fontEl) => {
 			addResource(fontEl.getAttribute("href"), "font");
 		});
 
-		// Video sources
 		document.querySelectorAll("video source[src]").forEach((sourceEl) => {
 			addResource(sourceEl.getAttribute("src"), "video");
 		});
 
-		// Scan inline style attributes for url(...) references
 		document.querySelectorAll("[style]").forEach((el) => {
 			const styleAttr = el.getAttribute("style");
 			const regex = /url\(["']?([^"')]+)["']?\)/g;
@@ -71,7 +154,6 @@
 			}
 		});
 
-		// Scan <style> tags for url(...) references
 		document.querySelectorAll("style").forEach((styleEl) => {
 			const cssText = styleEl.innerText;
 			const regex = /url\(["']?([^"')]+)["']?\)/g;
@@ -81,17 +163,15 @@
 			}
 		});
 
-		// Convert resourceMap to array of resources
 		const resources = [...resourceMap.values()];
 
-		// Send the collected data to the background script for processing
 		chrome.runtime.sendMessage({
 			type: "PAGE_DATA",
 			data: {
 				domain: domain,
 				html: html,
 				resources: resources,
-				url: window.location.href // Include the current URL
+				url: window.location.href
 			}
 		});
 	} catch (err) {

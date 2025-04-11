@@ -16,11 +16,11 @@ chrome.action.onClicked.addListener((tab) => {
 	});
 });
 
-// Listen for messages from content script
+// Update the message listener to capture sender
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message.type === 'PAGE_DATA') {
-		// Keep the messaging channel open
-		processPageData(message.data)
+		// Pass sender to processPageData
+		processPageData(message.data, sender)
 			.then(() => sendResponse({ success: true }))
 			.catch(error => sendResponse({ success: false, error: error.message }));
 		return true; // Indicates async response
@@ -28,8 +28,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	return false;
 });
 
-async function processPageData(data) {
+// Update function signature to accept sender
+async function processPageData(data, sender) {
 	const { domain, html, resources, url } = data;
+	// Keep track of the tab ID to send messages back to it
+	const tabId = sender.tab.id;
 
 	const zip = new JSZip();
 	// Create a folder for the domain in the zip archive
@@ -63,6 +66,9 @@ async function processPageData(data) {
 	const MAX_RESOURCE_SIZE_MB = 10;
 	const MAX_TOTAL_SIZE_MB = 100;
 	let totalSize = 0;
+
+	// Notify content script that download has started
+	chrome.tabs.sendMessage(tabId, { type: 'DOWNLOAD_STARTED' });
 
 	// Process and add each resource
 	for (const res of resources) {
@@ -124,6 +130,12 @@ async function processPageData(data) {
 			const percentage = Math.round((processedCount / totalResources) * 100);
 			chrome.action.setBadgeText({ text: `${percentage}%` });
 
+			// Send progress to content script
+			chrome.tabs.sendMessage(tabId, {
+				type: 'DOWNLOAD_PROGRESS',
+				percentage: percentage
+			});
+
 		} catch (err) {
 			console.error(`Error downloading resource ${res.url}:`, err);
 		}
@@ -141,6 +153,12 @@ async function processPageData(data) {
 
 				// After ZIP generation is complete
 				chrome.action.setBadgeText({ text: "" });
+
+				// Notify content script that download is complete
+				chrome.tabs.sendMessage(tabId, {
+					type: 'DOWNLOAD_COMPLETE',
+					filename: zipFilename
+				});
 			} catch (err) {
 				console.error("Error creating data URL:", err);
 			}
