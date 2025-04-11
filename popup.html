@@ -3,94 +3,203 @@
     <head>
         <title>Page Download Extension</title>
         <style>
+            :root {
+                --bg-primary: #2d3647; /* Darker variant of #697e9b */
+                --bg-secondary: #3a455a; /* Slightly lighter background */
+                --text-primary: #f8f9fa; /* White text for contrast */
+                --text-secondary: #d0d6e0; /* Light blue-gray for secondary text */
+                --accent-green: #aad8b0; /* Dark green from icon */
+                --accent-light: #dcf0e6; /* Light green from icon */
+                --accent-blue: #697e9b; /* Dark blue-gray from icon */
+                --accent-hover: #8fc196; /* Darker version of accent green */
+                --border-radius: 6px;
+            }
+
             body {
-                font-family: Arial, sans-serif;
-                padding: 15px;
-                width: 320px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans,
+                    Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+                padding: 0;
+                margin: 0;
+                width: 340px;
+                background-color: var(--bg-primary);
+                color: var(--text-primary);
             }
+
+            .container {
+                padding: 20px;
+            }
+
+            .header {
+                background-color: var(--accent-green);
+                padding: 16px 20px;
+                border-radius: 0 0 var(--border-radius) var(--border-radius);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+                margin-bottom: 20px;
+                position: relative;
+                overflow: hidden;
+            }
+
+            .download-btn {
+                background-color: var(--bg-primary);
+                color: var(--accent-green);
+                font-weight: 600;
+                font-size: 16px;
+                border: none;
+                border-radius: var(--border-radius);
+                padding: 12px 20px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                transition: all 0.2s;
+            }
+
+            .download-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                background-color: #232c3c;
+            }
+
+            .download-btn:active {
+                transform: translateY(0);
+            }
+
+            .download-btn svg {
+                margin-right: 10px;
+                width: 20px;
+                height: 20px;
+            }
+
+            h2 {
+                margin: 0 0 20px 0;
+                font-size: 18px;
+                font-weight: 500;
+                color: var(--text-primary);
+            }
+
             .setting-group {
-                margin-bottom: 15px;
+                margin-bottom: 20px;
+                background-color: var(--bg-secondary);
+                padding: 16px;
+                border-radius: var(--border-radius);
+                border-left: 3px solid var(--accent-green);
             }
+
             label {
                 display: block;
-                margin-bottom: 5px;
-                font-weight: bold;
+                margin-bottom: 8px;
+                font-weight: 500;
             }
+
             .description {
-                color: #555;
-                font-size: 12px;
-                margin-bottom: 5px;
+                color: var(--text-secondary);
+                font-size: 13px;
+                margin-bottom: 10px;
+                line-height: 1.4;
             }
+
             input {
-                width: 80px;
-                padding: 5px;
-            }
-            .buttons {
-                margin-top: 15px;
-                text-align: right;
-            }
-            button {
-                padding: 6px 12px;
-                background-color: #4688f1;
-                color: white;
-                border: none;
+                width: 90px;
+                padding: 8px 10px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 4px;
-                cursor: pointer;
-                margin-left: 5px;
-            }
-            button:hover {
-                background-color: #3b78e7;
-            }
-            .download-btn {
-                background-color: #4caf50;
-                font-weight: bold;
-                margin-bottom: 20px;
-                display: block;
-                width: 100%;
-                padding: 10px;
+                background-color: rgba(0, 0, 0, 0.2);
+                color: var(--text-primary);
+                font-family: inherit;
                 font-size: 14px;
             }
-            .download-btn:hover {
-                background-color: #45a049;
+
+            input:focus {
+                outline: none;
+                border-color: var(--accent-green);
             }
+
+            .buttons {
+                margin-top: 20px;
+                display: flex;
+                justify-content: flex-end;
+            }
+
+            .btn-secondary {
+                background-color: rgba(255, 255, 255, 0.1);
+                color: var(--text-primary);
+                border: none;
+                border-radius: var(--border-radius);
+                padding: 10px 16px;
+                font-size: 14px;
+                cursor: pointer;
+                transition: all 0.2s;
+                font-weight: 500;
+            }
+
+            .btn-secondary:hover {
+                background-color: rgba(255, 255, 255, 0.15);
+            }
+
+            .btn-primary {
+                background-color: var(--accent-blue);
+                color: var(--text-primary);
+                border: none;
+                border-radius: var(--border-radius);
+                padding: 10px 16px;
+                margin-left: 8px;
+                font-size: 14px;
+                cursor: pointer;
+                transition: all 0.2s;
+                font-weight: 500;
+            }
+
+            .btn-primary:hover {
+                background-color: #778ca8;
+            }
+
             .status {
-                color: #4caf50;
-                font-size: 12px;
+                color: var(--accent-green);
+                font-size: 13px;
                 height: 15px;
-                margin-top: 10px;
-            }
-            h2 {
-                margin-top: 0;
+                margin-top: 12px;
+                text-align: center;
             }
         </style>
     </head>
     <body>
-        <button id="downloadButton" class="download-btn">Download This Page</button>
+        <div class="header">
+            <button id="downloadButton" class="download-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-6 2h12v2H6v-2z" />
+                </svg>
+                Download This Page
+            </button>
+        </div>
 
-        <h2>Settings</h2>
+        <div class="container">
+            <h2>Settings</h2>
 
-        <div class="setting-group">
-            <label for="maxResourceSize">Maximum individual resource size (MB):</label>
-            <div class="description">
-                Maximum size for any single file (images, scripts, etc.) to download
+            <div class="setting-group">
+                <label for="maxResourceSize">Maximum individual resource size (MB):</label>
+                <div class="description">
+                    Maximum size for any single file (images, scripts, etc.) to download
+                </div>
+                <input type="number" id="maxResourceSize" min="1" max="100" />
             </div>
-            <input type="number" id="maxResourceSize" min="1" max="100" />
-        </div>
 
-        <div class="setting-group">
-            <label for="maxTotalSize">Maximum total archive size (MB):</label>
-            <div class="description">
-                Maximum total size of all resources combined in the ZIP archive
+            <div class="setting-group">
+                <label for="maxTotalSize">Maximum total archive size (MB):</label>
+                <div class="description">
+                    Maximum total size of all resources combined in the ZIP archive
+                </div>
+                <input type="number" id="maxTotalSize" min="5" max="500" />
             </div>
-            <input type="number" id="maxTotalSize" min="5" max="500" />
-        </div>
 
-        <div class="buttons">
-            <button id="resetButton">Reset to Defaults</button>
-            <button id="saveButton">Save</button>
-        </div>
+            <div class="buttons">
+                <button id="resetButton" class="btn-secondary">Reset</button>
+                <button id="saveButton" class="btn-primary">Save Settings</button>
+            </div>
 
-        <div class="status" id="statusMessage"></div>
+            <div class="status" id="statusMessage"></div>
+        </div>
 
         <script src="popup.js"></script>
     </body>
