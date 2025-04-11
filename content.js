@@ -54,6 +54,13 @@
 			completeToast(message.filename);
 		} else if (message.type === 'DOWNLOAD_STARTED') {
 			showToast();
+		} else if (message.type === 'LOG') {
+			// Log background messages in the page console
+			if (message.level && console[message.level]) {
+				console[message.level](`[Background] ${message.message}`);
+			} else {
+				console.log(`[Background] ${message.message}`);
+			}
 		}
 	});
 
@@ -177,10 +184,6 @@
 		const resources = [...resourceMap.values()];
 
 		console.log("Resources found:", resources);
-		console.log("HTML content:", html);
-		console.log("Domain:", domain);
-		console.log("Page URL:", window.location.href);
-		console.log("Sending data to background script...");
 
 		chrome.runtime.sendMessage({
 			type: "PAGE_DATA",

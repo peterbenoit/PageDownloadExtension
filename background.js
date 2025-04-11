@@ -28,6 +28,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	return false;
 });
 
+// Helper to proxy logs to content.js
+function proxyConsole(tabId, method, message) {
+	console[method](message);
+	chrome.tabs.sendMessage(tabId, { type: 'LOG', level: method, message: message });
+}
+
 // Update function signature to accept sender
 async function processPageData(data, sender) {
 	const { domain, html, resources, url } = data;
@@ -49,7 +55,7 @@ async function processPageData(data, sender) {
 			htmlFilename = pathname.split('/').pop();
 		}
 	} catch (error) {
-		console.warn("Couldn't parse URL, using index.html as default", error);
+		proxyConsole(tabId, 'warn', "Couldn't parse URL, using index.html as default");
 	}
 
 	// Modify the HTML before adding it to the zip
@@ -63,8 +69,8 @@ async function processPageData(data, sender) {
 	chrome.action.setBadgeText({ text: "0%" });
 	chrome.action.setBadgeBackgroundColor({ color: "#4688F1" });
 
-	const MAX_RESOURCE_SIZE_MB = 10;
-	const MAX_TOTAL_SIZE_MB = 100;
+	const MAX_RESOURCE_SIZE_MB = 30;
+	const MAX_TOTAL_SIZE_MB = 120;
 	let totalSize = 0;
 
 	// Notify content script that download has started
@@ -87,7 +93,7 @@ async function processPageData(data, sender) {
 
 			// Check domain restriction
 			if (type.sameDomainOnly && res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
-				console.warn(`Skipping cross-domain resource: ${res.url}`);
+				proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
 				continue;
 			}
 
@@ -105,7 +111,7 @@ async function processPageData(data, sender) {
 				filename = res.url.split('/').pop().split('?')[0];
 			}
 
-			console.log(`Fetching resource: ${res.url} → ${filename}`);
+			proxyConsole(tabId, 'log', `Fetching resource: ${res.url} → ${filename}`);
 
 			// IMPROVED: More robust fetch with timeout and error handling
 			const controller = new AbortController();
@@ -128,23 +134,23 @@ async function processPageData(data, sender) {
 
 				// Check individual resource size
 				if (blob.size > MAX_RESOURCE_SIZE_MB * 1024 * 1024) {
-					console.warn(`Skipping ${res.url}: exceeds maximum resource size`);
+					proxyConsole(tabId, 'warn', `Skipping ${res.url}: exceeds maximum resource size`);
 					continue;
 				}
 
 				// Track total size
 				totalSize += blob.size;
 				if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
-					console.warn(`Total size exceeds limit of ${MAX_TOTAL_SIZE_MB}MB`);
+					proxyConsole(tabId, 'warn', `Total size exceeds limit of ${MAX_TOTAL_SIZE_MB}MB`);
 				}
 
 				const subFolder = domainFolder.folder(type.folder);
 				subFolder.file(filename, blob);
-				console.log(`Successfully added to ZIP: ${filename}`);
+				proxyConsole(tabId, 'log', `Successfully added to ZIP: ${filename}`);
 
 			} catch (fetchError) {
 				clearTimeout(timeoutId);
-				console.error(`Failed to fetch ${res.url}: ${fetchError.message}`);
+				proxyConsole(tabId, 'error', `Failed to fetch ${res.url}: ${fetchError.message}`);
 				continue;
 			}
 
@@ -160,7 +166,7 @@ async function processPageData(data, sender) {
 			});
 
 		} catch (err) {
-			console.error(`Error processing resource ${res.url}:`, err);
+			proxyConsole(tabId, 'error', `Error processing resource ${res.url}: ${err.message}`);
 		}
 	}
 
@@ -183,11 +189,11 @@ async function processPageData(data, sender) {
 					filename: zipFilename
 				});
 			} catch (err) {
-				console.error("Error creating data URL:", err);
+				proxyConsole(tabId, 'error', "Error creating data URL:", err);
 			}
 		})
 		.catch((err) => {
-			console.error("Error generating zip file:", err);
+			proxyConsole(tabId, 'error', "Error generating zip file:", err);
 		});
 }
 
