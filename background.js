@@ -1,3 +1,7 @@
+chrome.runtime.onInstalled.addListener(() => {
+	console.log("Extension installed.");
+});
+
 // Include JSZip (ensure jszip.min.js is added to your extension folder)
 importScripts('jszip.min.js');
 
