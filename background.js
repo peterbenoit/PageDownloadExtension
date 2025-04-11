@@ -129,12 +129,15 @@ async function processPageData(data) {
 		}
 	}
 
+	// Generate a descriptive filename for the ZIP
+	const zipFilename = getZipFilename(domain, url);
+
 	// Generate zip blob and trigger a single download prompt
 	zip.generateAsync({ type: "blob" })
 		.then(async (content) => {
 			try {
 				const dataUrl = await blobToDataURL(content);
-				downloadURL(`${domain}.zip`, dataUrl);
+				downloadURL(zipFilename, dataUrl);
 
 				// After ZIP generation is complete
 				chrome.action.setBadgeText({ text: "" });
@@ -168,6 +171,32 @@ function downloadURL(filename, url) {
 			console.error(chrome.runtime.lastError);
 		}
 	});
+}
+
+// Helper function to generate a descriptive ZIP filename
+function getZipFilename(domain, url) {
+	try {
+		const parsedUrl = new URL(url);
+		const pathname = parsedUrl.pathname;
+
+		// If it's the homepage or just a slash
+		if (pathname === "/" || pathname === "") {
+			return `${domain}.zip`;
+		}
+
+		// Remove extensions and clean up the pathname
+		let pageName = pathname.split('/').pop().split('.')[0];
+
+		// If we have a page name, add it to the filename
+		if (pageName && pageName.length > 0) {
+			return `${domain}-${pageName}.zip`;
+		} else {
+			return `${domain}.zip`;
+		}
+	} catch (error) {
+		console.warn("Couldn't parse URL for ZIP filename, using domain only", error);
+		return `${domain}.zip`;
+	}
 }
 
 // Modifies the HTML string to update local references and strip analytics scripts
