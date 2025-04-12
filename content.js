@@ -441,7 +441,7 @@
 			addResource(sourceEl.getAttribute("src"), "video");
 		});
 
-		// IMPROVED: Extract background images from inline styles with more robust regex
+		// Extract background images from inline styles with more robust regex
 		document.querySelectorAll("[style]").forEach((el) => {
 			const styleAttr = el.getAttribute("style");
 			// More flexible regex that handles spaces and various quoting styles
@@ -452,13 +452,37 @@
 			}
 		});
 
-		// IMPROVED: Extract background images from style elements
+		// Extract background images from style elements
 		document.querySelectorAll("style").forEach((styleEl) => {
 			const cssText = styleEl.textContent; // Using textContent instead of innerText
 			const regex = /url\s*\(\s*(['"]?)([^"')]+)\1\s*\)/gi;
 			let match;
 			while ((match = regex.exec(cssText)) !== null) {
 				addResource(match[2], "image");
+			}
+		});
+
+		// Process fonts - expanded methods
+		// 1. Standard preloaded fonts
+		document.querySelectorAll("link[rel='preload'][as='font'][href]").forEach((fontEl) => {
+			addResource(fontEl.getAttribute("href"), "font");
+		});
+
+		// 2. Font files by extension
+		document.querySelectorAll("link[href]").forEach((linkEl) => {
+			const href = linkEl.getAttribute("href");
+			if (href && /\.(woff2?|ttf|otf|eot)($|\?)/.test(href)) {
+				addResource(href, "font");
+			}
+		});
+
+		// 3. Check for font URLs in stylesheets
+		document.querySelectorAll("style").forEach((styleEl) => {
+			const cssText = styleEl.textContent;
+			const fontRegex = /url\s*\(\s*['"]?([^'")]+\.(woff2?|ttf|otf|eot))['"]?\s*\)/gi;
+			let match;
+			while ((match = fontRegex.exec(cssText)) !== null) {
+				addResource(match[1], "font");
 			}
 		});
 

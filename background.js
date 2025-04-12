@@ -92,7 +92,7 @@ async function processPageData(data, sender) {
 						video: { folder: "videos", extension: null, sameDomainOnly: true }
 					};
 
-					const type = resourceTypes[res.type];
+					let type = resourceTypes[res.type];
 					if (!type) continue; // Skip unsupported resource types
 
 					// Check if the user disabled this resource type
@@ -143,6 +143,15 @@ async function processPageData(data, sender) {
 						filename = res.url.split('/').pop().split('?')[0];
 					}
 
+					// Inside processPageData function where you process resources
+					// Add this after the image path check
+					if (type.folder === "fonts" ||
+						/\.(woff2?|ttf|otf|eot)($|\?)/.test(filename.toLowerCase()) ||
+						res.url.includes("/fonts/")) {
+						// Ensure this is processed as a font
+						type = resourceTypes["font"];
+					}
+
 					proxyConsole(tabId, 'log', `Fetching resource: ${res.url} → ${filename}`);
 
 					// More robust fetch with timeout
@@ -159,6 +168,12 @@ async function processPageData(data, sender) {
 							throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
 						}
 						const blob = await response.blob();
+
+						const contentType = response.headers.get('content-type');
+						if (contentType && contentType.includes('font/')) {
+							// Override the resource type to font regardless of original detection
+							type = resourceTypes["font"];
+						}
 
 						// Check individual resource size
 						if (blob.size > MAX_RESOURCE_SIZE_MB * 1024 * 1024) {
