@@ -1,6 +1,11 @@
 document.addEventListener('DOMContentLoaded', function () {
 	const maxResourceSizeInput = document.getElementById('maxResourceSize');
 	const maxTotalSizeInput = document.getElementById('maxTotalSize');
+	const downloadCssInput = document.getElementById('downloadCss');
+	const downloadJsInput = document.getElementById('downloadJs');
+	const downloadImagesInput = document.getElementById('downloadImages');
+	const downloadFontsInput = document.getElementById('downloadFonts');
+	const downloadVideosInput = document.getElementById('downloadVideos');
 	const saveButton = document.getElementById('saveButton');
 	const resetButton = document.getElementById('resetButton');
 	const statusMessage = document.getElementById('statusMessage');
@@ -12,10 +17,20 @@ document.addEventListener('DOMContentLoaded', function () {
 	// Load saved settings or defaults
 	chrome.storage.sync.get({
 		maxResourceSize: DEFAULT_MAX_RESOURCE_SIZE,
-		maxTotalSize: DEFAULT_MAX_TOTAL_SIZE
+		maxTotalSize: DEFAULT_MAX_TOTAL_SIZE,
+		downloadCss: true,
+		downloadJs: true,
+		downloadImages: true,
+		downloadFonts: true,
+		downloadVideos: true
 	}, function (items) {
 		maxResourceSizeInput.value = items.maxResourceSize;
 		maxTotalSizeInput.value = items.maxTotalSize;
+		downloadCssInput.checked = items.downloadCss;
+		downloadJsInput.checked = items.downloadJs;
+		downloadImagesInput.checked = items.downloadImages;
+		downloadFontsInput.checked = items.downloadFonts;
+		downloadVideosInput.checked = items.downloadVideos;
 	});
 
 	// Handle the download button click
@@ -47,6 +62,11 @@ document.addEventListener('DOMContentLoaded', function () {
 	saveButton.addEventListener('click', function () {
 		const resourceSize = parseInt(maxResourceSizeInput.value, 10);
 		const totalSize = parseInt(maxTotalSizeInput.value, 10);
+		const downloadCss = downloadCssInput.checked;
+		const downloadJs = downloadJsInput.checked;
+		const downloadImages = downloadImagesInput.checked;
+		const downloadFonts = downloadFontsInput.checked;
+		const downloadVideos = downloadVideosInput.checked;
 
 		// Validate inputs
 		if (isNaN(resourceSize) || resourceSize < 1) {
@@ -67,10 +87,15 @@ document.addEventListener('DOMContentLoaded', function () {
 			return;
 		}
 
-		// Save settings
+		// Save settings including new resource type options
 		chrome.storage.sync.set({
 			maxResourceSize: resourceSize,
-			maxTotalSize: totalSize
+			maxTotalSize: totalSize,
+			downloadCss: downloadCss,
+			downloadJs: downloadJs,
+			downloadImages: downloadImages,
+			downloadFonts: downloadFonts,
+			downloadVideos: downloadVideos
 		}, function () {
 			statusMessage.textContent = 'Settings saved!';
 			statusMessage.style.color = '#4CAF50';
@@ -86,10 +111,20 @@ document.addEventListener('DOMContentLoaded', function () {
 	resetButton.addEventListener('click', function () {
 		maxResourceSizeInput.value = DEFAULT_MAX_RESOURCE_SIZE;
 		maxTotalSizeInput.value = DEFAULT_MAX_TOTAL_SIZE;
+		downloadCssInput.checked = true;
+		downloadJsInput.checked = true;
+		downloadImagesInput.checked = true;
+		downloadFontsInput.checked = true;
+		downloadVideosInput.checked = true;
 
 		chrome.storage.sync.set({
 			maxResourceSize: DEFAULT_MAX_RESOURCE_SIZE,
-			maxTotalSize: DEFAULT_MAX_TOTAL_SIZE
+			maxTotalSize: DEFAULT_MAX_TOTAL_SIZE,
+			downloadCss: true,
+			downloadJs: true,
+			downloadImages: true,
+			downloadFonts: true,
+			downloadVideos: true
 		}, function () {
 			statusMessage.textContent = 'Reset to defaults';
 			statusMessage.style.color = '#4CAF50';

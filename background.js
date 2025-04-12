@@ -36,11 +36,9 @@ function updateFileStatus(tabId, url, status, reason = null) {
 // Update function signature to accept sender
 async function processPageData(data, sender) {
 	const { domain, html, resources, url } = data;
-	// Keep track of the tab ID to send messages back to it
 	const tabId = sender.tab.id;
 
 	const zip = new JSZip();
-	// Create a folder for the domain in the zip archive
 	const domainFolder = zip.folder(domain);
 
 	// Determine the HTML filename based on the URL
@@ -48,8 +46,6 @@ async function processPageData(data, sender) {
 	try {
 		const parsedUrl = new URL(url);
 		const pathname = parsedUrl.pathname;
-
-		// If pathname is more than just "/" and ends with .html, use that filename
 		if (pathname.length > 1 && pathname.endsWith('.html')) {
 			htmlFilename = pathname.split('/').pop();
 		}
@@ -61,170 +57,162 @@ async function processPageData(data, sender) {
 	const modifiedHtml = modifyHTML(html);
 	domainFolder.file(htmlFilename, modifiedHtml);
 
-	// Before processing resources
 	let processedCount = 0;
 	const totalResources = resources.length;
-
 	chrome.action.setBadgeText({ text: "0%" });
 	chrome.action.setBadgeBackgroundColor({ color: "#4688F1" });
 
-	let MAX_RESOURCE_SIZE_MB = 30;
-	let MAX_TOTAL_SIZE_MB = 120;
+	// Load all settings (max sizes and resource type options)
+	chrome.storage.sync.get({
+		maxResourceSize: 30,
+		maxTotalSize: 120,
+		downloadCss: true,
+		downloadJs: true,
+		downloadImages: true,
+		downloadFonts: true,
+		downloadVideos: true
+	}, function (settings) {
+		const MAX_RESOURCE_SIZE_MB = settings.maxResourceSize;
+		const MAX_TOTAL_SIZE_MB = settings.maxTotalSize;
+		proxyConsole(tabId, 'log', `Settings loaded: Max Resource Size: ${MAX_RESOURCE_SIZE_MB}MB, Max Total Size: ${MAX_TOTAL_SIZE_MB}MB`);
 
-	// Load settings at startup
-	function loadSettings() {
-		chrome.storage.sync.get({
-			maxResourceSize: 30,
-			maxTotalSize: 120
-		}, function (items) {
-			MAX_RESOURCE_SIZE_MB = items.maxResourceSize;
-			MAX_TOTAL_SIZE_MB = items.maxTotalSize;
-			console.log(`Settings loaded: Max Resource Size: ${MAX_RESOURCE_SIZE_MB}MB, Max Total Size: ${MAX_TOTAL_SIZE_MB}MB`);
-		});
-	}
+		(async function processResources() {
+			let totalSize = 0;
+			// Notify content script that download has started
+			chrome.tabs.sendMessage(tabId, { type: 'DOWNLOAD_STARTED' });
 
-	// Listen for settings changes
-	chrome.storage.onChanged.addListener(function (changes) {
-		if (changes.maxResourceSize) {
-			MAX_RESOURCE_SIZE_MB = changes.maxResourceSize.newValue;
-		}
-		if (changes.maxTotalSize) {
-			MAX_TOTAL_SIZE_MB = changes.maxTotalSize.newValue;
-		}
-		console.log(`Settings updated: Max Resource Size: ${MAX_RESOURCE_SIZE_MB}MB, Max Total Size: ${MAX_TOTAL_SIZE_MB}MB`);
-	});
+			for (const res of resources) {
+				try {
+					// Define resource types and their handling rules
+					const resourceTypes = {
+						css: { folder: "css", extension: ".css", sameDomainOnly: false },
+						js: { folder: "js", extension: ".js", sameDomainOnly: true },
+						image: { folder: "images", extension: null, sameDomainOnly: false },
+						font: { folder: "fonts", extension: null, sameDomainOnly: false },
+						video: { folder: "videos", extension: null, sameDomainOnly: true }
+					};
 
-	// Load settings at startup
-	loadSettings();
+					const type = resourceTypes[res.type];
+					if (!type) continue; // Skip unsupported resource types
 
-	let totalSize = 0;
+					// Check if the user disabled this resource type
+					if (res.type === 'css' && !settings.downloadCss) {
+						proxyConsole(tabId, 'warn', `User disabled CSS downloads: ${res.url}`);
+						updateFileStatus(tabId, res.url, 'skipped', 'CSS disabled by user');
+						continue;
+					}
+					if (res.type === 'js' && !settings.downloadJs) {
+						proxyConsole(tabId, 'warn', `User disabled JS downloads: ${res.url}`);
+						updateFileStatus(tabId, res.url, 'skipped', 'JS disabled by user');
+						continue;
+					}
+					if (res.type === 'image' && !settings.downloadImages) {
+						proxyConsole(tabId, 'warn', `User disabled Images downloads: ${res.url}`);
+						updateFileStatus(tabId, res.url, 'skipped', 'Images disabled by user');
+						continue;
+					}
+					if (res.type === 'font' && !settings.downloadFonts) {
+						proxyConsole(tabId, 'warn', `User disabled Fonts downloads: ${res.url}`);
+						updateFileStatus(tabId, res.url, 'skipped', 'Fonts disabled by user');
+						continue;
+					}
+					if (res.type === 'video' && !settings.downloadVideos) {
+						proxyConsole(tabId, 'warn', `User disabled Videos downloads: ${res.url}`);
+						updateFileStatus(tabId, res.url, 'skipped', 'Videos disabled by user');
+						continue;
+					}
 
-	// Notify content script that download has started
-	chrome.tabs.sendMessage(tabId, { type: 'DOWNLOAD_STARTED' });
+					// Check domain restriction for types that require same-domain only
+					if (type.sameDomainOnly && res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
+						proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
+						updateFileStatus(tabId, res.url, 'skipped', 'Cross-domain resource');
+						continue;
+					}
 
-	// Process and add each resource
-	for (const res of resources) {
-		try {
-			// Define resource types and their handling rules
-			const resourceTypes = {
-				css: { folder: "css", extension: ".css", sameDomainOnly: false },
-				js: { folder: "js", extension: ".js", sameDomainOnly: true },
-				image: { folder: "images", extension: null, sameDomainOnly: true },
-				font: { folder: "fonts", extension: null, sameDomainOnly: false },
-				video: { folder: "videos", extension: null, sameDomainOnly: true }
-			};
+					// Process filename
+					let filename = res.filename || res.url.split('/').pop().split('?')[0];
+					if (type.extension && !filename.endsWith(type.extension)) {
+						if (type.extension === ".js" || type.extension === ".css") {
+							if (type.extension === ".js") continue; // Skip non-JS files per rule
+							filename += type.extension;
+						}
+					}
 
-			const type = resourceTypes[res.type];
-			if (!type) continue; // Skip unsupported resource types
+					// Adjust filename for images if necessary
+					if (type.folder === "images" && (res.url.includes("/img/") || res.url.includes("/images/"))) {
+						filename = res.url.split('/').pop().split('?')[0];
+					}
 
-			// Check domain restriction
-			if (type.sameDomainOnly && res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
-				proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
-				updateFileStatus(tabId, res.url, 'skipped', 'Cross-domain resource');
-				continue;
-			}
+					proxyConsole(tabId, 'log', `Fetching resource: ${res.url} → ${filename}`);
 
-			// Process filename
-			let filename = res.filename || res.url.split('/').pop().split('?')[0];
-			if (type.extension && !filename.endsWith(type.extension)) {
-				if (type.extension === ".js" || type.extension === ".css") {
-					if (type.extension === ".js") continue; // Skip non-JS files
-					filename += type.extension;
+					// More robust fetch with timeout
+					const controller = new AbortController();
+					const timeoutId = setTimeout(() => controller.abort(), 30000);
+					try {
+						const response = await fetch(res.url, {
+							signal: controller.signal,
+							credentials: 'omit',
+							cache: 'force-cache'
+						});
+						clearTimeout(timeoutId);
+						if (!response.ok) {
+							throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+						}
+						const blob = await response.blob();
+
+						// Check individual resource size
+						if (blob.size > MAX_RESOURCE_SIZE_MB * 1024 * 1024) {
+							proxyConsole(tabId, 'warn', `Skipping ${res.url}: exceeds maximum resource size`);
+							updateFileStatus(tabId, res.url, 'skipped', `Exceeds max size limit (${MAX_RESOURCE_SIZE_MB}MB)`);
+							continue;
+						}
+
+						// Track total size
+						totalSize += blob.size;
+						if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
+							proxyConsole(tabId, 'warn', `Total size exceeds limit of ${MAX_TOTAL_SIZE_MB}MB`);
+						}
+
+						const subFolder = domainFolder.folder(type.folder);
+						subFolder.file(filename, blob);
+						proxyConsole(tabId, 'log', `Successfully added to ZIP: ${filename}`);
+						updateFileStatus(tabId, res.url, 'success');
+					} catch (fetchError) {
+						clearTimeout(timeoutId);
+						proxyConsole(tabId, 'error', `Failed to fetch ${res.url}: ${fetchError.message}`);
+						updateFileStatus(tabId, res.url, 'failed', fetchError.message);
+						continue;
+					}
+
+					// Update progress after each resource
+					processedCount++;
+					const percentage = Math.round((processedCount / totalResources) * 100);
+					chrome.action.setBadgeText({ text: `${percentage}%` });
+					chrome.tabs.sendMessage(tabId, {
+						type: 'DOWNLOAD_PROGRESS',
+						percentage: percentage
+					});
+				} catch (err) {
+					proxyConsole(tabId, 'error', `Error processing resource ${res.url}: ${err.message}`);
 				}
 			}
 
-			// Handle img folder references to map to images folder
-			if (type.folder === "images" && (res.url.includes("/img/") || res.url.includes("/images/"))) {
-				filename = res.url.split('/').pop().split('?')[0];
-			}
-
-			proxyConsole(tabId, 'log', `Fetching resource: ${res.url} → ${filename}`);
-
-			// IMPROVED: More robust fetch with timeout and error handling
-			const controller = new AbortController();
-			const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-
+			// Generate a descriptive filename for the ZIP
+			const zipFilename = getZipFilename(domain, url);
 			try {
-				const response = await fetch(res.url, {
-					signal: controller.signal,
-					credentials: 'omit', // Don't send cookies
-					cache: 'force-cache' // Try to use cache when possible
-				});
-
-				clearTimeout(timeoutId);
-
-				if (!response.ok) {
-					throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-				}
-
-				const blob = await response.blob();
-
-				// Check individual resource size
-				if (blob.size > MAX_RESOURCE_SIZE_MB * 1024 * 1024) {
-					proxyConsole(tabId, 'warn', `Skipping ${res.url}: exceeds maximum resource size`);
-					updateFileStatus(tabId, res.url, 'skipped', `Exceeds max size limit (${MAX_RESOURCE_SIZE_MB}MB)`);
-					continue;
-				}
-
-				// Track total size
-				totalSize += blob.size;
-				if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
-					proxyConsole(tabId, 'warn', `Total size exceeds limit of ${MAX_TOTAL_SIZE_MB}MB`);
-				}
-
-				const subFolder = domainFolder.folder(type.folder);
-				subFolder.file(filename, blob);
-				proxyConsole(tabId, 'log', `Successfully added to ZIP: ${filename}`);
-				updateFileStatus(tabId, res.url, 'success');
-
-			} catch (fetchError) {
-				clearTimeout(timeoutId);
-				proxyConsole(tabId, 'error', `Failed to fetch ${res.url}: ${fetchError.message}`);
-				updateFileStatus(tabId, res.url, 'failed', fetchError.message);
-				continue;
-			}
-
-			// Update progress after each resource
-			processedCount++;
-			const percentage = Math.round((processedCount / totalResources) * 100);
-			chrome.action.setBadgeText({ text: `${percentage}%` });
-
-			// Send progress to content script
-			chrome.tabs.sendMessage(tabId, {
-				type: 'DOWNLOAD_PROGRESS',
-				percentage: percentage
-			});
-
-		} catch (err) {
-			proxyConsole(tabId, 'error', `Error processing resource ${res.url}: ${err.message}`);
-		}
-	}
-
-	// Generate a descriptive filename for the ZIP
-	const zipFilename = getZipFilename(domain, url);
-
-	// Generate zip blob and trigger a single download prompt
-	zip.generateAsync({ type: "blob" })
-		.then(async (content) => {
-			try {
+				const content = await zip.generateAsync({ type: "blob" });
 				const dataUrl = await blobToDataURL(content);
 				downloadURL(zipFilename, dataUrl);
-
-				// After ZIP generation is complete
 				chrome.action.setBadgeText({ text: "" });
-
-				// Notify content script that download is complete
 				chrome.tabs.sendMessage(tabId, {
 					type: 'DOWNLOAD_COMPLETE',
 					filename: zipFilename
 				});
 			} catch (err) {
-				proxyConsole(tabId, 'error', "Error creating data URL:", err);
+				proxyConsole(tabId, 'error', `Error generating ZIP file: ${err.message}`);
 			}
-		})
-		.catch((err) => {
-			proxyConsole(tabId, 'error', "Error generating zip file:", err);
-		});
+		})();
+	});
 }
 
 // Convert blob to data URL using FileReader
