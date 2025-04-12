@@ -441,7 +441,7 @@
 			addResource(sourceEl.getAttribute("src"), "video");
 		});
 
-		// Extract background images from inline styles with more robust regex
+		// Extract background images from inline styles
 		document.querySelectorAll("[style]").forEach((el) => {
 			const styleAttr = el.getAttribute("style");
 			// More flexible regex that handles spaces and various quoting styles
