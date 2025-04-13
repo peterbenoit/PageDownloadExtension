@@ -1,21 +1,15 @@
-chrome.runtime.onInstalled.addListener(() => {
-	console.log("Extension installed.");
-});
+// Modularized background.js
+
+// Import necessary modules
+import { onInstalledListener } from './modules/onInstalled.js';
+import { messageListener } from './modules/messageHandler.js';
+
+// Register event listeners
+chrome.runtime.onInstalled.addListener(onInstalledListener);
+chrome.runtime.onMessage.addListener(messageListener);
 
 // Include JSZip (ensure jszip.min.js is added to your extension folder)
 importScripts('jszip.min.js');
-
-// Update the message listener to capture sender
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-	if (message.type === 'PAGE_DATA') {
-		// Pass sender to processPageData
-		processPageData(message.data, sender)
-			.then(() => sendResponse({ success: true }))
-			.catch(error => sendResponse({ success: false, error: error.message }));
-		return true; // Indicates async response
-	}
-	return false;
-});
 
 // Helper to proxy logs to content.js
 function proxyConsole(tabId, method, message) {
