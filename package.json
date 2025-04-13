@@ -1,0 +1,35 @@
+{
+    "name": "pagedownloadextension",
+    "version": "1.0.0",
+    "description": "Chrome extension to download web pages with resources",
+    "main": "background.js",
+    "scripts": {
+        "dev": "vite build --watch && node post-build.js",
+        "build": "vite build && node post-build.js",
+        "postbuild": "node post-build.js",
+        "preview": "vite preview"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/peterbenoit/PageDownloadExtension.git"
+    },
+    "keywords": [
+        "chrome-extension",
+        "web-download",
+        "page-archiver"
+    ],
+    "author": "",
+    "license": "ISC",
+    "type": "module",
+    "bugs": {
+        "url": "https://github.com/peterbenoit/PageDownloadExtension/issues"
+    },
+    "homepage": "https://github.com/peterbenoit/PageDownloadExtension#readme",
+    "devDependencies": {
+        "@crxjs/vite-plugin": "^1.0.14",
+        "vite": "^2.9.18"
+    },
+    "dependencies": {
+        "jszip": "^3.10.1"
+    }
+}
