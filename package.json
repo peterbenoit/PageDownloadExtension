@@ -1,0 +1,40 @@
+{
+    "name": "pagedownloadextension",
+    "version": "1.0.0",
+    "description": "Browser extension to download web pages with resources",
+    "main": "background.js",
+    "scripts": {
+        "build": "webpack --config webpack.config.js",
+        "watch": "webpack --config webpack.config.js --watch",
+        "dev": "webpack --config webpack.config.js --watch --mode=development",
+        "prod": "webpack --config webpack.config.js --mode=production",
+        "clean": "rm -rf dist"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/peterbenoit/PageDownloadExtension.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "commonjs",
+    "bugs": {
+        "url": "https://github.com/peterbenoit/PageDownloadExtension/issues"
+    },
+    "homepage": "https://github.com/peterbenoit/PageDownloadExtension#readme",
+    "devDependencies": {
+        "@babel/core": "^7.22.10",
+        "@babel/plugin-transform-runtime": "^7.26.10",
+        "@babel/preset-env": "^7.22.10",
+        "@babel/runtime": "^7.27.0",
+        "@types/chrome": "^0.0.243",
+        "babel-loader": "^9.1.3",
+        "copy-webpack-plugin": "^11.0.0",
+        "core-js": "^3.8.3",
+        "css-loader": "^6.8.1",
+        "html-webpack-plugin": "^5.5.3",
+        "style-loader": "^3.3.3",
+        "webpack": "^5.88.2",
+        "webpack-cli": "^5.1.4"
+    }
+}
