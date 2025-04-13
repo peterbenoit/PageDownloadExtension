@@ -1,5 +1,11 @@
 (function () {
 	function createToastElement() {
+		// Remove any existing toasts first
+		const existingToast = document.getElementById('page-download-toast');
+		if (existingToast) {
+			existingToast.remove();
+		}
+
 		const toast = document.createElement('div');
 		toast.id = 'page-download-toast';
 		toast.setAttribute('role', 'alert');
@@ -8,19 +14,20 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            background-color: rgba(33, 33, 33, 0.95);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            z-index: 10000;
-            font-family: Arial, sans-serif;
+            background-color: rgba(42, 42, 46, 0.97);
+            color: #f8f8f8;
+            padding: 16px;
+            border-radius: 8px;
+            z-index: 2147483647;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: none;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            transition: opacity 0.3s ease-in-out;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+            transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
             max-width: 400px;
-            max-height: 80vh;
+            max-height: 85vh;
             display: flex;
             flex-direction: column;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         `;
 
 		// sr-only class for screen readers
@@ -46,25 +53,43 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-            padding-bottom: 8px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            padding-bottom: 12px;
         `;
 
 		const title = document.createElement('div');
 		title.textContent = 'Page Download';
-		title.style.fontWeight = 'bold';
+		title.style.cssText = `
+            font-weight: 600;
+            font-size: 15px;
+            letter-spacing: 0.3px;
+        `;
 
 		const closeBtn = document.createElement('button');
 		closeBtn.innerHTML = '&times;';
 		closeBtn.style.cssText = `
             background: none;
             border: none;
-            color: white;
-            font-size: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 28px;
+            font-weight: 300;
             cursor: pointer;
-            padding: 0 5px;
+            padding: 0 8px;
+            line-height: 0.8;
+            margin-right: -6px;
+            margin-top: -6px;
+            transition: color 0.2s ease;
         `;
+
+		// Add hover effects to close button
+		closeBtn.onmouseover = () => {
+			closeBtn.style.color = 'white';
+		};
+		closeBtn.onmouseout = () => {
+			closeBtn.style.color = 'rgba(255, 255, 255, 0.8)';
+		};
+
 		closeBtn.onclick = () => {
 			hideToast();
 		};
@@ -77,6 +102,9 @@
 		const statusMsg = document.createElement('div');
 		statusMsg.id = 'page-download-status';
 		statusMsg.textContent = 'Downloading page: 0%';
+		statusMsg.style.cssText = `
+			font-size: 11px;
+		`;
 		toast.appendChild(statusMsg);
 
 		// Progress bar
@@ -84,11 +112,11 @@
 		progressBar.id = 'page-download-progress-bar';
 		progressBar.style.cssText = `
             width: 100%;
-            background-color: #444;
-            height: 5px;
-            margin-top: 8px;
-            margin-bottom: 12px;
-            border-radius: 5px;
+            background-color: rgba(255, 255, 255, 0.1);
+            height: 6px;
+            margin-top: 10px;
+            margin-bottom: 14px;
+            border-radius: 6px;
             overflow: hidden;
         `;
 
@@ -110,9 +138,12 @@
 		fileStatusContainer.style.cssText = `
             max-height: 250px;
             overflow-y: auto;
-            margin-top: 10px;
-            font-size: 12px;
+            margin-top: 12px;
+            font-size: 11px;
             display: none;
+            padding-right: 5px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
         `;
 
 		// Create sections for each file status category
