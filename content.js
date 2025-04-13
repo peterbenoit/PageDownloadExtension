@@ -414,11 +414,38 @@
 		list.appendChild(item);
 	}
 
+	function cleanupExtensionElements(html) {
+		// Create a DOM parser to work with the HTML string
+		const parser = new DOMParser();
+		const doc = parser.parseFromString(html, 'text/html');
+
+		// Remove extension toast notification
+		const toast = doc.getElementById('page-download-toast');
+		if (toast) {
+			toast.remove();
+		}
+
+		// Remove any other extension elements by their IDs or classes
+		const extensionElements = doc.querySelectorAll(
+			'#page-download-progress-bar, ' +
+			'#page-download-progress-fill, ' +
+			'#page-download-status, ' +
+			'#file-status-container, ' +
+			'.page-download-extension-element' // Add a class to any other elements you inject
+		);
+
+		extensionElements.forEach(el => el.remove());
+
+		// Return the cleaned HTML
+		return doc.documentElement.outerHTML;
+	}
+
 	try {
 		const domainRaw = window.location.hostname;
 		const domain = domainRaw.replace(/^www\./, '');
 
-		const html = document.documentElement.outerHTML;
+		// Clean the HTML before sending it
+		const html = cleanupExtensionElements(document.documentElement.outerHTML);
 
 		const resourceMap = new Map();
 
