@@ -131,6 +131,27 @@ async function processPageData(data, sender) {
 
 					// Process filename
 					let filename = res.filename || res.url.split('/').pop().split('?')[0];
+
+					// Special handling for Next.js images
+					if (res.url.includes('/_next/image') && res.url.includes('url=')) {
+						try {
+							// Extract the encoded URL parameter
+							const urlMatch = res.url.match(/url=([^&]+)/);
+							if (urlMatch && urlMatch[1]) {
+								// Decode the URL
+								const decodedUrl = decodeURIComponent(urlMatch[1]);
+								// Extract filename from the decoded URL
+								const nextjsFilename = decodedUrl.split('/').pop().split('?')[0];
+								if (nextjsFilename) {
+									filename = nextjsFilename;
+								}
+							}
+						} catch (e) {
+							proxyConsole(tabId, 'warn', `Error extracting Next.js image name: ${e.message}`);
+						}
+					}
+
+					// Continue with the rest of your filename processing...
 					if (type.extension && !filename.endsWith(type.extension)) {
 						if (type.extension === ".js" || type.extension === ".css") {
 							if (type.extension === ".js") continue; // Skip non-JS files per rule
