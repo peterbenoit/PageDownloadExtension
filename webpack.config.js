@@ -30,7 +30,7 @@ module.exports = {
 		new CopyPlugin({
 			patterns: [
 				{ from: "manifest.json", to: "manifest.json" },
-				{ from: "popup.html", to: "popup.html" },
+				{ from: "WORKING_VERSION/popup.html", to: "popup.html" },
 				{ from: "icons", to: "icons", noErrorOnMissing: true }
 			],
 		}),
