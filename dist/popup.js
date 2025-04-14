@@ -1,0 +1,1 @@
+document.addEventListener("DOMContentLoaded",(function(){console.log("Popup script loaded");var o=document.getElementById("downloadButton");o&&o.addEventListener("click",(function(){console.log("Download button clicked")}))}));

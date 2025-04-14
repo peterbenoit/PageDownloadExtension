@@ -1,0 +1,1 @@
+chrome.runtime.onMessage.addListener((function(e,o,n){"PAGE_DATA"===e.type&&console.log("Received PAGE_DATA message")})),console.log("Background script loaded");
