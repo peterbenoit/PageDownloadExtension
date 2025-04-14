@@ -3,24 +3,13 @@
  */
 import { logDebug, setupMessageListeners } from './logger';
 import { getStatusSummary } from './fileStatus';
-import { startPageDownload } from './pageProcessor';
+import './pageProcessor.js'; // Ensure pageProcessor runs and sets up its listener
 
 // Log that background script has loaded
 logDebug('Background script initialized');
 
 // Set up message handlers
 const messageHandlers = {
-	downloadPage: async (message, sender, sendResponse) => {
-		logDebug('Received download request with options:', message.options);
-		try {
-			const result = await startPageDownload(message.options);
-			sendResponse(result);
-		} catch (error) {
-			logDebug('Error in downloadPage handler:', error);
-			sendResponse({ success: false, error: error.message });
-		}
-	},
-
 	getStatus: (message, sender, sendResponse) => {
 		const status = getStatusSummary();
 		logDebug('Status requested, returning:', status);
@@ -49,21 +38,17 @@ setupMessageListeners(messageHandlers);
 chrome.action.onClicked.addListener((tab) => {
 	logDebug('Browser action clicked');
 
-	// Open popup or handle direct download based on extension configuration
-	chrome.storage.local.get(['directDownload'], (result) => {
-		if (result.directDownload) {
-			// Trigger direct download with default options
-			chrome.storage.local.get(['downloadOptions'], async (optionsResult) => {
-				const options = optionsResult.downloadOptions || {
-					downloadImages: true,
-					downloadCSS: true,
-					downloadScripts: false,
-					removeTracking: true
-				};
-				await startPageDownload(options);
-			});
-		}
-	});
+	// Example: Send a message to content script to initiate scan/data collection
+	// This might need adjustment based on final workflow.
+	// If content script sends PAGE_DATA proactively, this might just trigger UI feedback.
+	chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER_DOWNLOAD_PROCESS' }) // Or a more appropriate message
+		.then(response => {
+			logDebug('Response from trigger message:', response);
+		})
+		.catch(error => {
+			logDebug(`Could not send trigger message to tab ${tab.id}: ${error.message}. Content script might not be ready.`);
+			// Optionally, try injecting the content script here if necessary
+		});
 });
 
 // Set up initial extension state

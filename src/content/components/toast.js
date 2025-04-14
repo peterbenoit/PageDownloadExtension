@@ -3,81 +3,414 @@
  */
 export class Toast {
 	constructor() {
-		this.toastContainer = null;
-		this.progressBar = null;
-		this.progressText = null;
-		this.setupToastContainer();
+		this.toastElement = null;
+		this.createToastElement(); // Create element on instantiation
 	}
 
-	setupToastContainer() {
-		// Create toast container if it doesn't exist
-		this.toastContainer = document.createElement('div');
-		this.toastContainer.id = 'page-download-toast';
-		this.toastContainer.style.display = 'none';
-		// Add styling for toast container
-		this.toastContainer.style.position = 'fixed';
-		this.toastContainer.style.bottom = '20px';
-		this.toastContainer.style.right = '20px';
-		this.toastContainer.style.backgroundColor = '#333';
-		this.toastContainer.style.color = 'white';
-		this.toastContainer.style.padding = '10px 20px';
-		this.toastContainer.style.borderRadius = '5px';
-		this.toastContainer.style.zIndex = '10000';
-		this.toastContainer.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)';
-		document.body.appendChild(this.toastContainer);
+	createToastElement() {
+		// Remove any existing toasts first
+		const existingToast = document.getElementById('page-download-toast');
+		if (existingToast) {
+			existingToast.remove();
+		}
+
+		const toast = document.createElement('div');
+		toast.id = 'page-download-toast';
+		toast.setAttribute('role', 'alert');
+		toast.setAttribute('aria-live', 'assertive');
+		toast.style.cssText = `
+            position: fixed;
+            top: 20px; /* Changed from bottom to top */
+            right: 20px;
+            background-color: rgba(42, 42, 46, 0.97);
+            color: #f8f8f8;
+            padding: 16px;
+            border-radius: 8px;
+            z-index: 2147483647;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: none;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+            transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            max-width: 400px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        `;
+
+		// sr-only class for screen readers
+		const sronly = document.createElement('style');
+		sronly.textContent = `
+            .sr-only {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                padding: 0;
+                margin: -1px;
+                overflow: hidden;
+                clip: rect(0, 0, 0, 0);
+                white-space: nowrap;
+                border-width: 0;
+            }
+        `;
+		document.head.appendChild(sronly);
+
+		// Header section with title and close button
+		const header = document.createElement('div');
+		header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            padding-bottom: 12px;
+        `;
+
+		const title = document.createElement('div');
+		title.textContent = 'Page Download';
+		title.style.cssText = `
+            font-weight: 600;
+            font-size: 15px;
+            letter-spacing: 0.3px;
+        `;
+
+		const closeBtn = document.createElement('button');
+		closeBtn.innerHTML = '&times;';
+		closeBtn.style.cssText = `
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 28px;
+            font-weight: 300;
+            cursor: pointer;
+            padding: 0 8px;
+            line-height: 0.8;
+            margin-right: -6px;
+            margin-top: -6px;
+            transition: color 0.2s ease;
+        `;
+
+		// Add hover effects to close button
+		closeBtn.onmouseover = () => {
+			closeBtn.style.color = 'white';
+		};
+		closeBtn.onmouseout = () => {
+			closeBtn.style.color = 'rgba(255, 255, 255, 0.8)';
+		};
+
+		closeBtn.onclick = () => {
+			this.hideToast(); // Use class method
+		};
+
+		header.appendChild(title);
+		header.appendChild(closeBtn);
+		toast.appendChild(header);
+
+		// Status message
+		const statusMsg = document.createElement('div');
+		statusMsg.id = 'page-download-status';
+		statusMsg.textContent = 'Downloading page: 0%';
+		statusMsg.style.cssText = `
+			font-size: 11px;
+		`;
+		toast.appendChild(statusMsg);
+
+		// Progress bar
+		const progressBar = document.createElement('div');
+		progressBar.id = 'page-download-progress-bar';
+		progressBar.style.cssText = `
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.1);
+            height: 6px;
+            margin-top: 10px;
+            margin-bottom: 14px;
+            border-radius: 6px;
+            overflow: hidden;
+        `;
+
+		const progressFill = document.createElement('div');
+		progressFill.id = 'page-download-progress-fill';
+		progressFill.style.cssText = `
+            height: 100%;
+            background-color: #4688F1;
+            width: 0%;
+            transition: width 0.3s ease;
+        `;
+
+		progressBar.appendChild(progressFill);
+		toast.appendChild(progressBar);
+
+		// File status container with scrolling
+		const fileStatusContainer = document.createElement('div');
+		fileStatusContainer.id = 'file-status-container';
+		fileStatusContainer.style.cssText = `
+            max-height: 250px;
+            overflow-y: auto;
+            margin-top: 12px;
+            font-size: 11px;
+            display: none;
+            padding-right: 5px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+        `;
+
+		// Create sections for each file status category
+		const categories = ['success', 'skipped', 'failed'];
+		categories.forEach(category => {
+			const section = document.createElement('div');
+			section.id = `${category}-files`;
+			section.style.cssText = `
+                margin-bottom: 10px;
+                display: none;
+            `;
+
+			const heading = document.createElement('div');
+			heading.style.cssText = `
+                font-weight: bold;
+                margin-bottom: 5px;
+                color: ${category === 'success' ? '#4CAF50' : category === 'skipped' ? '#FFC107' : '#F44336'};
+            `;
+
+			heading.textContent = category === 'success' ? 'Downloaded Files:' :
+				category === 'skipped' ? 'Skipped Files:' : 'Failed Files:';
+
+			const list = document.createElement('ul');
+			list.id = `${category}-list`;
+			list.style.cssText = `
+                list-style-type: none;
+                padding-left: 0;
+                margin: 0;
+            `;
+
+			section.appendChild(heading);
+			section.appendChild(list);
+			fileStatusContainer.appendChild(section);
+		});
+
+		toast.appendChild(fileStatusContainer);
+		document.body.appendChild(toast);
+
+		const focusableElements = toast.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+		const firstElement = focusableElements[0];
+		const lastElement = focusableElements[focusableElements.length - 1];
+
+		// Trap focus in modal
+		toast.addEventListener('keydown', (e) => { // Use arrow function or bind 'this' if needed
+			if (e.key === 'Tab') {
+				if (e.shiftKey && document.activeElement === firstElement) {
+					e.preventDefault();
+					lastElement.focus();
+				} else if (!e.shiftKey && document.activeElement === lastElement) {
+					e.preventDefault();
+					firstElement.focus();
+				}
+			} else if (e.key === 'Escape') {
+				this.hideToast(); // Use class method
+			}
+		});
+
+		this.toastElement = toast; // Store reference
 	}
 
-	showToast(message, duration = 3000) {
-		this.toastContainer.textContent = message;
-		this.toastContainer.style.display = 'block';
+	showToast() {
+		if (this.toastElement) {
+			// Reset file status data when starting a new download
+			const successList = this.toastElement.querySelector('#success-list');
+			const skippedList = this.toastElement.querySelector('#skipped-list');
+			const failedList = this.toastElement.querySelector('#failed-list');
+			if (successList) successList.innerHTML = '';
+			if (skippedList) skippedList.innerHTML = '';
+			if (failedList) failedList.innerHTML = '';
 
-		setTimeout(() => {
-			this.hideToast();
-		}, duration);
+			const successFiles = this.toastElement.querySelector('#success-files');
+			const skippedFiles = this.toastElement.querySelector('#skipped-files');
+			const failedFiles = this.toastElement.querySelector('#failed-files');
+			const fileStatusContainer = this.toastElement.querySelector('#file-status-container');
+			if (successFiles) successFiles.style.display = 'none';
+			if (skippedFiles) skippedFiles.style.display = 'none';
+			if (failedFiles) failedFiles.style.display = 'none';
+			if (fileStatusContainer) fileStatusContainer.style.display = 'none';
+
+			const statusMsg = this.toastElement.querySelector('#page-download-status');
+			if (statusMsg) statusMsg.textContent = 'Downloading page: 0%';
+
+			const progressFill = this.toastElement.querySelector('#page-download-progress-fill');
+			if (progressFill) {
+				progressFill.style.width = '0%';
+				progressFill.style.backgroundColor = '#4688F1';
+			}
+
+			this.toastElement.style.display = 'flex';
+			this.toastElement.style.opacity = '1';
+		} else {
+			// Create toast if it doesn't exist (shouldn't happen with constructor change)
+			this.createToastElement();
+			this.showToast();
+		}
 	}
 
 	hideToast() {
-		this.toastContainer.style.display = 'none';
+		if (this.toastElement) {
+			this.toastElement.style.opacity = '0';
+			setTimeout(() => {
+				if (this.toastElement) { // Check again in case it was removed
+					this.toastElement.style.display = 'none';
+				}
+			}, 300);
+		}
 	}
 
-	showProgress(message) {
-		// Create progress container
-		this.toastContainer.textContent = '';
-		this.toastContainer.style.display = 'block';
+	updateToast(percentage) {
+		if (this.toastElement) {
+			const statusMsg = this.toastElement.querySelector('#page-download-status');
+			if (statusMsg) statusMsg.textContent = `Downloading page: ${percentage}%`;
 
-		const messageElem = document.createElement('div');
-		messageElem.textContent = message;
-		this.toastContainer.appendChild(messageElem);
-
-		// Add progress bar
-		this.progressBar = document.createElement('div');
-		this.progressBar.style.width = '100%';
-		this.progressBar.style.backgroundColor = '#444';
-		this.progressBar.style.marginTop = '10px';
-		this.progressBar.style.height = '5px';
-		this.progressBar.style.position = 'relative';
-
-		const progressFill = document.createElement('div');
-		progressFill.style.width = '0%';
-		progressFill.style.backgroundColor = '#4CAF50';
-		progressFill.style.height = '100%';
-
-		this.progressBar.appendChild(progressFill);
-		this.toastContainer.appendChild(this.progressBar);
-
-		// Add progress text
-		this.progressText = document.createElement('div');
-		this.progressText.textContent = '0%';
-		this.progressText.style.textAlign = 'center';
-		this.progressText.style.fontSize = '12px';
-		this.progressText.style.marginTop = '5px';
-		this.toastContainer.appendChild(this.progressText);
-
-		return {
-			updateProgress: (percent) => {
-				progressFill.style.width = `${percent}%`;
-				this.progressText.textContent = `${percent}%`;
+			const progressFill = this.toastElement.querySelector('#page-download-progress-fill');
+			if (progressFill) {
+				progressFill.style.width = `${percentage}%`;
 			}
-		};
+		}
 	}
+
+	completeToast(filename) {
+		if (this.toastElement) {
+			const statusMsg = this.toastElement.querySelector('#page-download-status');
+			if (statusMsg) statusMsg.textContent = `Download complete: ${filename}`;
+
+			const progressFill = this.toastElement.querySelector('#page-download-progress-fill');
+			if (progressFill) {
+				progressFill.style.width = '100%';
+				progressFill.style.backgroundColor = '#4CAF50';
+			}
+
+			// Show file status section if we have any file statuses
+			const fileContainer = this.toastElement.querySelector('#file-status-container');
+			const successList = this.toastElement.querySelector('#success-list');
+			const skippedList = this.toastElement.querySelector('#skipped-list');
+			const failedList = this.toastElement.querySelector('#failed-list');
+
+			if (fileContainer && successList && skippedList && failedList && (
+				successList.children.length > 0 ||
+				skippedList.children.length > 0 ||
+				failedList.children.length > 0
+			)) {
+				fileContainer.style.display = 'block';
+			}
+
+			// Don't auto-hide toast anymore - user must close manually
+		}
+	}
+
+	addFileStatus(url, status, reason) {
+		if (!this.toastElement) return;
+
+		const listId = `${status}-list`;
+		const list = this.toastElement.querySelector(`#${listId}`);
+		if (!list) return;
+
+		// Make sure the category container is visible
+		const statusFilesContainer = this.toastElement.querySelector(`#${status}-files`);
+		const fileStatusContainer = this.toastElement.querySelector('#file-status-container');
+		if (statusFilesContainer) statusFilesContainer.style.display = 'block';
+		if (fileStatusContainer) fileStatusContainer.style.display = 'block';
+
+
+		// Create list item for the file
+		const item = document.createElement('li');
+		item.style.cssText = `
+			margin-bottom: 3px;
+			display: flex;
+			align-items: flex-start;
+		`;
+
+		// Status icon
+		const icon = document.createElement('span');
+		icon.style.cssText = `
+			margin-right: 5px;
+			font-weight: bold;
+		`;
+
+		// Get filename from URL first
+		const filename = url.split('/').pop().split('?')[0];
+		let displayName = filename.length > 30 ? filename.substring(0, 27) + '...' : filename;
+
+		// Create fileInfo element before using it
+		const fileInfo = document.createElement('div');
+		fileInfo.style.wordBreak = 'break-word';
+
+		if (status === 'success') {
+			icon.innerHTML = '✓';
+			icon.setAttribute('aria-hidden', 'true');
+			icon.style.color = '#4CAF50';
+
+			const srSpan = document.createElement('span');
+			srSpan.textContent = 'Success: ';
+			srSpan.className = 'sr-only';
+
+			const titleSpan = document.createElement('span');
+			titleSpan.setAttribute('title', url);
+			titleSpan.textContent = displayName;
+
+			fileInfo.appendChild(srSpan);
+			fileInfo.appendChild(titleSpan);
+
+			if (reason) {
+				fileInfo.appendChild(document.createElement('br'));
+				const small = document.createElement('small');
+				small.textContent = reason;
+				fileInfo.appendChild(small);
+			}
+		} else if (status === 'skipped') {
+			icon.innerHTML = '⚠️';
+			icon.setAttribute('aria-hidden', 'true');
+			icon.style.color = '#FFC107';
+
+			const srSpan = document.createElement('span');
+			srSpan.textContent = 'Skipped: ';
+			srSpan.className = 'sr-only';
+
+			const titleSpan = document.createElement('span');
+			titleSpan.setAttribute('title', url);
+			titleSpan.textContent = displayName;
+
+			fileInfo.appendChild(srSpan);
+			fileInfo.appendChild(titleSpan);
+
+			if (reason) {
+				fileInfo.appendChild(document.createElement('br'));
+				const small = document.createElement('small');
+				small.textContent = reason;
+				fileInfo.appendChild(small);
+			}
+		} else { // failed
+			icon.innerHTML = '✗';
+			icon.setAttribute('aria-hidden', 'true');
+			icon.style.color = '#F44336';
+
+			const srSpan = document.createElement('span');
+			srSpan.textContent = 'Failed: ';
+			srSpan.className = 'sr-only';
+
+			const titleSpan = document.createElement('span');
+			titleSpan.setAttribute('title', url);
+			titleSpan.textContent = displayName;
+
+			fileInfo.appendChild(srSpan);
+			fileInfo.appendChild(titleSpan);
+
+			if (reason) {
+				fileInfo.appendChild(document.createElement('br'));
+				const small = document.createElement('small');
+				small.textContent = reason;
+				fileInfo.appendChild(small);
+			}
+		}
+
+		item.appendChild(icon);
+		item.appendChild(fileInfo);
+		list.appendChild(item);
+	}
+
+	// Remove the old showProgress method if it exists
+	// showProgress(message) { ... } // Remove this
 }
