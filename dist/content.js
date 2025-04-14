@@ -1,1 +1,0 @@
-console.log("Content script loaded"),chrome.runtime.onMessage.addListener((function(e,o,n){"DOWNLOAD_PROGRESS"===e.type&&console.log("Download progress: ".concat(e.percentage,"%"))}));
