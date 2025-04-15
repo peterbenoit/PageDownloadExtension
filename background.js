@@ -123,10 +123,23 @@ async function processPageData(data, sender) {
 					}
 
 					// Check domain restriction for types that require same-domain only
-					if (type.sameDomainOnly && res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
-						proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
-						updateFileStatus(tabId, res.url, 'skipped', 'Cross-domain resource');
-						continue;
+					// if (type.sameDomainOnly && res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
+					// 	proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
+					// 	updateFileStatus(tabId, res.url, 'skipped', 'Cross-domain resource');
+					// 	continue;
+					// }
+					console.log('THINGS:', new URL(res.url).hostname, domain);
+
+					if (type.sameDomainOnly && res.url.startsWith("http")) {
+						// Normalize domains for comparison by removing www prefix
+						const resourceHost = new URL(res.url).hostname.replace(/^www\./, '');
+						const pageHost = domain.replace(/^www\./, '');
+
+						if (resourceHost !== pageHost) {
+							proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
+							updateFileStatus(tabId, res.url, 'skipped', 'Cross-domain resource');
+							continue;
+						}
 					}
 
 					// Process filename
