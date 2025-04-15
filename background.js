@@ -132,7 +132,7 @@ async function processPageData(data, sender) {
 						proxyConsole(tabId, 'log', `Domain check: ${resourceHost} vs ${pageHost}`);
 
 						if (resourceHost !== pageHost) {
-							proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
+							// proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
 							updateFileStatus(tabId, res.url, 'skipped', 'Cross-domain resource');
 							continue;
 						}

@@ -23,11 +23,12 @@
             display: none;
             box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
             transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-            max-width: 400px;
-            max-height: 85vh;
+            width: 320px;
+            max-height: 400px;
             display: flex;
             flex-direction: column;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
         `;
 
 		// sr-only class for screen readers
@@ -136,6 +137,7 @@
 		const fileStatusContainer = document.createElement('div');
 		fileStatusContainer.id = 'file-status-container';
 		fileStatusContainer.style.cssText = `
+            flex: 1;
             max-height: 250px;
             overflow-y: auto;
             margin-top: 12px;
@@ -206,9 +208,15 @@
 
 	createToastElement();
 
+	// Auto-hide timer
+	let autoHideTimer;
+
 	chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 		if (message.type === 'DOWNLOAD_PROGRESS') {
 			updateToast(message.percentage);
+
+			// Reset auto-hide timer on progress updates
+			clearTimeout(autoHideTimer);
 		} else if (message.type === 'DOWNLOAD_COMPLETE') {
 			completeToast(message.filename);
 		} else if (message.type === 'DOWNLOAD_STARTED') {
@@ -250,6 +258,9 @@
 
 			toast.style.display = 'flex';
 			toast.style.opacity = '1';
+
+			// Clear any existing timer
+			clearTimeout(autoHideTimer);
 		} else {
 			// Create toast if it doesn't exist
 			createToastElement();
@@ -264,6 +275,9 @@
 			setTimeout(() => {
 				toast.style.display = 'none';
 			}, 300);
+
+			// Clear the auto-hide timer when manually closed
+			clearTimeout(autoHideTimer);
 		}
 	}
 
@@ -302,7 +316,9 @@
 				fileContainer.style.display = 'block';
 			}
 
-			// Don't auto-hide toast anymore - user must close manually
+			// Set auto-hide timer to fade away after 10 seconds
+			clearTimeout(autoHideTimer);
+			autoHideTimer = setTimeout(hideToast, 10000);
 		}
 	}
 
