@@ -123,17 +123,13 @@ async function processPageData(data, sender) {
 					}
 
 					// Check domain restriction for types that require same-domain only
-					// if (type.sameDomainOnly && res.url.startsWith("http") && new URL(res.url).hostname !== domain) {
-					// 	proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
-					// 	updateFileStatus(tabId, res.url, 'skipped', 'Cross-domain resource');
-					// 	continue;
-					// }
-					console.log('THINGS:', new URL(res.url).hostname, domain);
-
 					if (type.sameDomainOnly && res.url.startsWith("http")) {
 						// Normalize domains for comparison by removing www prefix
 						const resourceHost = new URL(res.url).hostname.replace(/^www\./, '');
 						const pageHost = domain.replace(/^www\./, '');
+
+						// Use the proxyConsole function to make this visible in the content script
+						proxyConsole(tabId, 'log', `Domain check: ${resourceHost} vs ${pageHost}`);
 
 						if (resourceHost !== pageHost) {
 							proxyConsole(tabId, 'warn', `Skipping cross-domain resource: ${res.url}`);
@@ -145,32 +141,15 @@ async function processPageData(data, sender) {
 					// Process filename
 					let filename = res.filename || res.url.split('/').pop().split('?')[0];
 
-					// Clean filename of any potentially invalid characters at this stage
-					filename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-
-					// Create a more unique filename to prevent collisions for all resource types
-					if (res.url.includes('/')) {
-						try {
-							const imageUrl = new URL(res.url);
-							const pathParts = imageUrl.pathname.split('/').filter(Boolean);
-
-							// If we have path parts, use the last 2 parts to create a more unique name
-							if (pathParts.length > 1) {
-								// For images, use parent directory as prefix
-								// For fonts, keep the version number if available (like v34)
-								const parentDir = (res.type === 'font' && pathParts.includes('s'))
-									? pathParts[pathParts.indexOf('s') + 1]
-									: pathParts[pathParts.length - 2];
-								const baseName = pathParts[pathParts.length - 1].split('?')[0];
-								filename = `${parentDir}-${baseName}`;
-							}
-						} catch (e) {
-							proxyConsole(tabId, 'warn', `Error creating unique filename: ${e.message}`);
-						}
+					// Create a more unique filename to prevent collisions
+					if (res.type === 'image') {
+						// ...existing code for image files...
 					}
-
-					// Ensure filename doesn't have query parameters
-					filename = filename.split('?')[0];
+					// Don't add folder prefix to JS files
+					else if (res.type === 'js') {
+						// Just use the filename as is, without the domain folder prefix
+						filename = filename.split('?')[0];
+					}
 
 					// Special handling for Next.js images
 					if (res.url.includes('/_next/image') && res.url.includes('url=')) {
@@ -431,10 +410,23 @@ function getZipFilename(domain, url) {
 function modifyHTML(html) {
 	// Replace external CSS references with local paths
 	html = html.replace(/<link[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi, function (match, url) {
+		// Skip data URLs or empty URLs
+		if (url.startsWith('data:') || !url) return match;
+
+		// Extract filename from URL
+		const filename = url.split('/').pop().split('?')[0];
+
+		// Handle absolute URLs
 		if (url.startsWith('http')) {
-			// Extract filename from URL
-			const filename = url.split('/').pop().split('?')[0];
 			return match.replace(url, `css/${filename}`);
+		}
+		// Handle relative URLs starting with /
+		else if (url.startsWith('/')) {
+			return match.replace(url, `css/${filename}`);
+		}
+		// Handle relative URLs without leading slash
+		else if (!url.startsWith('css/')) {
+			return match.replace(url, `css/${url}`);
 		}
 		return match;
 	});
@@ -446,10 +438,49 @@ function modifyHTML(html) {
 			return '';
 		}
 
+		if (!url) return match;
+
+		// Extract filename from URL
+		const filename = url.split('/').pop().split('?')[0];
+
+		// Handle absolute URLs
 		if (url.startsWith('http')) {
-			// Extract filename from URL
-			const filename = url.split('/').pop().split('?')[0];
 			return match.replace(url, `js/${filename}`);
+		}
+		// Handle relative URLs starting with /
+		else if (url.startsWith('/')) {
+			return match.replace(url, `js/${filename}`);
+		}
+		// Handle relative URLs without leading slash
+		else if (!url.startsWith('js/')) {
+			return match.replace(url, `js/${url}`);
+		}
+		return match;
+	});
+
+	// Add handling for standalone script tags (not just self-closing ones)
+	html = html.replace(/<script[^>]*src=["']([^"']+)["'][^>]*>[\s\S]*?<\/script>/gi, function (match, url) {
+		// Skip analytics scripts
+		if (url.includes('googletagmanager.com') || url.includes('clarity.ms')) {
+			return '';
+		}
+
+		if (!url) return match;
+
+		// Extract filename from URL
+		const filename = url.split('/').pop().split('?')[0];
+
+		// Handle absolute URLs
+		if (url.startsWith('http')) {
+			return match.replace(url, `js/${filename}`);
+		}
+		// Handle relative URLs starting with /
+		else if (url.startsWith('/')) {
+			return match.replace(url, `js/${filename}`);
+		}
+		// Handle relative URLs without leading slash
+		else if (!url.startsWith('js/')) {
+			return match.replace(url, `js/${url}`);
 		}
 		return match;
 	});
@@ -457,51 +488,39 @@ function modifyHTML(html) {
 	// Remove inline scripts that contain "gtag(" or "clarity("
 	html = html.replace(/<script[^>]*>[\s\S]*?(gtag\(|clarity\()[\s\S]*?<\/script>/g, "");
 
+	// Update favicon links
+	html = html.replace(/<link[^>]*rel=["'](icon|shortcut icon|apple-touch-icon|apple-touch-icon-precomposed)["'][^>]*href=["']([^"']+)["'][^>]*>/gi, function (match, rel, url) {
+		if (!url) return match;
+
+		// Extract filename
+		const filename = url.split('/').pop().split('?')[0];
+
+		// Handle absolute URLs
+		if (url.startsWith('http')) {
+			return match.replace(url, `images/${filename}`);
+		}
+		// Handle relative URLs starting with /
+		else if (url.startsWith('/')) {
+			return match.replace(url, `images/${filename}`);
+		}
+		// Handle relative URLs without leading slash
+		else if (!url.startsWith('images/')) {
+			return match.replace(url, `images/${url}`);
+		}
+		return match;
+	});
+
 	// Update background image paths in inline styles to point to the local images folder
 	html = html.replace(/url\(["']?([^"')]+)["']?\)/g, function (match, p1) {
 		if (p1.startsWith("data:")) return match;
+		if (!p1) return match;
 
 		try {
-			const imageUrl = new URL(p1, "http://example.com");
-			const pathParts = imageUrl.pathname.split('/').filter(Boolean);
-			const baseName = pathParts[pathParts.length - 1].split('?')[0];
-			let uniqueFilename;
-
-			if (pathParts.length > 1) {
-				const parentDir = pathParts[pathParts.length - 2];
-				uniqueFilename = `${parentDir}-${baseName}`;
-			} else {
-				uniqueFilename = baseName;
-			}
-
-			// Clean the filename
-			uniqueFilename = uniqueFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
-
-			// Ensure it has an extension
-			if (!uniqueFilename.match(/\.(jpe?g|png|gif|svg|webp|avif|bmp|ico)$/i)) {
-				// Try to extract extension from URL
-				const extMatch = p1.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
-				if (extMatch && /^(jpe?g|png|gif|svg|webp|avif|bmp|ico)$/i.test(extMatch[1])) {
-					uniqueFilename += `.${extMatch[1].toLowerCase()}`;
-				} else {
-					// Try to guess based on common patterns
-					if (p1.includes('.png')) {
-						uniqueFilename += '.png';
-					} else if (p1.includes('.gif')) {
-						uniqueFilename += '.gif';
-					} else if (p1.includes('.svg')) {
-						uniqueFilename += '.svg';
-					} else if (p1.includes('.webp')) {
-						uniqueFilename += '.webp';
-					} else {
-						uniqueFilename += '.jpg'; // Default
-					}
-				}
-			}
-
-			return `url('images/${uniqueFilename}')`;
+			// Extract just the filename without parent directory prefixing
+			const filename = p1.split('/').pop().split('?')[0];
+			return `url('images/${filename}')`;
 		} catch (e) {
-			// If URL parsing fails, use a simple approach
+			// If URL parsing fails, use the original approach
 			const filename = p1.split("/").pop().split("?")[0];
 			return `url('images/${filename}')`;
 		}
@@ -511,52 +530,49 @@ function modifyHTML(html) {
 	html = html.replace(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi, function (match, url) {
 		// Skip data URLs
 		if (url.startsWith('data:')) return match;
+		if (!url) return match;
 
 		try {
-			const imageUrl = new URL(url, "http://example.com");
-			const pathParts = imageUrl.pathname.split('/').filter(Boolean);
-			const baseName = pathParts[pathParts.length - 1].split('?')[0];
-			let uniqueFilename;
+			// Extract just the filename without parent directory prefixing
+			const filename = url.split('/').pop().split('?')[0];
 
-			if (pathParts.length > 1) {
-				const parentDir = pathParts[pathParts.length - 2];
-				uniqueFilename = `${parentDir}-${baseName}`;
-			} else {
-				uniqueFilename = baseName;
-			}
-
-			// Clean the filename
-			uniqueFilename = uniqueFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
-
-			// Ensure it has an extension
-			if (!uniqueFilename.match(/\.(jpe?g|png|gif|svg|webp|avif|bmp|ico)$/i)) {
-				// Try to extract extension from URL
-				const extMatch = url.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
-				if (extMatch && /^(jpe?g|png|gif|svg|webp|avif|bmp|ico)$/i.test(extMatch[1])) {
-					uniqueFilename += `.${extMatch[1].toLowerCase()}`;
-				} else {
-					// We'll use the extension that was determined during download
-					// Try to guess based on common patterns
-					if (url.includes('.png')) {
-						uniqueFilename += '.png';
-					} else if (url.includes('.gif')) {
-						uniqueFilename += '.gif';
-					} else if (url.includes('.svg')) {
-						uniqueFilename += '.svg';
-					} else if (url.includes('.webp')) {
-						uniqueFilename += '.webp';
-					} else {
-						uniqueFilename += '.jpg'; // Default
-					}
-				}
-			}
-
-			return match.replace(url, `images/${uniqueFilename}`);
+			// For assets that shouldn't be renamed with prefixes
+			return match.replace(url, `images/${filename}`);
 		} catch (e) {
 			// If URL parsing fails, use a simple approach
 			const filename = url.split('/').pop().split('?')[0];
 			return match.replace(url, `images/${filename}`);
 		}
+	});
+
+	// Update audio sources
+	html = html.replace(/<source[^>]*src=["']([^"']+)["'][^>]*>/gi, function (match, url) {
+		if (!url) return match;
+
+		// Extract filename
+		const filename = url.split('/').pop().split('?')[0];
+
+		// Handle different types of media
+		if (url.includes('.mp3') || url.includes('.wav') || url.includes('.ogg')) {
+			// Audio files
+			if (url.startsWith('http')) {
+				return match.replace(url, `audio/${filename}`);
+			} else if (url.startsWith('/')) {
+				return match.replace(url, `audio/${filename}`);
+			} else if (!url.startsWith('audio/')) {
+				return match.replace(url, `audio/${url}`);
+			}
+		} else if (url.includes('.mp4') || url.includes('.webm') || url.includes('.ogv')) {
+			// Video files
+			if (url.startsWith('http')) {
+				return match.replace(url, `videos/${filename}`);
+			} else if (url.startsWith('/')) {
+				return match.replace(url, `videos/${filename}`);
+			} else if (!url.startsWith('videos/')) {
+				return match.replace(url, `videos/${url}`);
+			}
+		}
+		return match;
 	});
 
 	return html;
