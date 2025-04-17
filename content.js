@@ -23,13 +23,19 @@
             display: none;
             box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
             transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-            width: 320px;
+            width: 430px;
             max-height: 400px;
             display: flex;
             flex-direction: column;
             border: 1px solid rgba(255, 255, 255, 0.1);
             overflow: hidden;
         `;
+
+		// Add interaction handlers to reset the timeout
+		toast.addEventListener('mouseover', resetAutoHideTimer);
+		toast.addEventListener('click', resetAutoHideTimer);
+		toast.addEventListener('touchstart', resetAutoHideTimer);
+		toast.addEventListener('focus', resetAutoHideTimer, true);
 
 		// sr-only class for screen readers
 		const sronly = document.createElement('style');
@@ -210,6 +216,16 @@
 
 	// Auto-hide timer
 	let autoHideTimer;
+	let isDownloadComplete = false;
+
+	// Reset auto-hide timer when user interacts with toast
+	function resetAutoHideTimer() {
+		// Only restart timer if download is complete
+		if (isDownloadComplete) {
+			clearTimeout(autoHideTimer);
+			autoHideTimer = setTimeout(hideToast, 10000);
+		}
+	}
 
 	chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 		if (message.type === 'DOWNLOAD_PROGRESS') {
@@ -237,6 +253,9 @@
 	function showToast() {
 		const toast = document.getElementById('page-download-toast');
 		if (toast) {
+			// Reset download complete status
+			isDownloadComplete = false;
+
 			// Reset file status data when starting a new download
 			document.getElementById('success-list').innerHTML = '';
 			document.getElementById('skipped-list').innerHTML = '';
@@ -274,6 +293,7 @@
 			toast.style.opacity = '0';
 			setTimeout(() => {
 				toast.style.display = 'none';
+				isDownloadComplete = false; // Reset download status
 			}, 300);
 
 			// Clear the auto-hide timer when manually closed
@@ -297,6 +317,9 @@
 	function completeToast(filename) {
 		const toast = document.getElementById('page-download-toast');
 		if (toast) {
+			// Mark download as complete
+			isDownloadComplete = true;
+
 			const statusMsg = document.getElementById('page-download-status');
 			statusMsg.textContent = `Download complete: ${filename}`;
 
