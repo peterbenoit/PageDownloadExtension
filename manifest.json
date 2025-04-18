@@ -10,7 +10,7 @@
     },
     "web_accessible_resources": [
         {
-            "resources": ["jszip.min.js"],
+            "resources": ["jszip.min.js", "easylist.txt"],
             "matches": ["<all_urls>"]
         }
     ],

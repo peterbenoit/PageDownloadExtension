@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	const downloadImagesInput = document.getElementById('downloadImages');
 	const downloadFontsInput = document.getElementById('downloadFonts');
 	const downloadVideosInput = document.getElementById('downloadVideos');
+	const removeAdsInput = document.getElementById('removeAds');
 	const saveButton = document.getElementById('saveButton');
 	const resetButton = document.getElementById('resetButton');
 	const statusMessage = document.getElementById('statusMessage');
@@ -22,7 +23,8 @@ document.addEventListener('DOMContentLoaded', function () {
 		downloadJs: true,
 		downloadImages: true,
 		downloadFonts: true,
-		downloadVideos: true
+		downloadVideos: true,
+		removeAds: false  // Default to false for ad blocking
 	}, function (items) {
 		maxResourceSizeInput.value = items.maxResourceSize;
 		maxTotalSizeInput.value = items.maxTotalSize;
@@ -31,6 +33,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		downloadImagesInput.checked = items.downloadImages;
 		downloadFontsInput.checked = items.downloadFonts;
 		downloadVideosInput.checked = items.downloadVideos;
+		removeAdsInput.checked = items.removeAds;
 	});
 
 	// Handle the download button click
@@ -67,6 +70,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		const downloadImages = downloadImagesInput.checked;
 		const downloadFonts = downloadFontsInput.checked;
 		const downloadVideos = downloadVideosInput.checked;
+		const removeAds = removeAdsInput.checked;
 
 		// Validate inputs
 		if (isNaN(resourceSize) || resourceSize < 1) {
@@ -95,7 +99,8 @@ document.addEventListener('DOMContentLoaded', function () {
 			downloadJs: downloadJs,
 			downloadImages: downloadImages,
 			downloadFonts: downloadFonts,
-			downloadVideos: downloadVideos
+			downloadVideos: downloadVideos,
+			removeAds: removeAds
 		}, function () {
 			statusMessage.textContent = 'Settings saved!';
 			statusMessage.style.color = '#4CAF50';
@@ -116,6 +121,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		downloadImagesInput.checked = true;
 		downloadFontsInput.checked = true;
 		downloadVideosInput.checked = true;
+		removeAdsInput.checked = false;  // Default to false
 
 		chrome.storage.sync.set({
 			maxResourceSize: DEFAULT_MAX_RESOURCE_SIZE,
@@ -124,7 +130,8 @@ document.addEventListener('DOMContentLoaded', function () {
 			downloadJs: true,
 			downloadImages: true,
 			downloadFonts: true,
-			downloadVideos: true
+			downloadVideos: true,
+			removeAds: false
 		}, function () {
 			statusMessage.textContent = 'Reset to defaults';
 			statusMessage.style.color = '#4CAF50';

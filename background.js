@@ -2,8 +2,35 @@ chrome.runtime.onInstalled.addListener(() => {
 	console.log("Extension installed.");
 });
 
-// Include JSZip (ensure jszip.min.js is added to your extension folder)
-importScripts('jszip.min.js', 'getImageType.js');
+// Include required scripts
+importScripts('jszip.min.js', 'getImageType.js', 'adRemover.js');
+
+// Store parsed selectors from EasyList
+let adSelectors = null;
+
+// Load EasyList at extension initialization
+async function loadEasyList() {
+	try {
+		const response = await fetch('easylist.txt');
+		const text = await response.text();
+		adSelectors = AdRemover.parseEasyListForSelectors(text);
+		console.log(`Loaded ${adSelectors.length} ad selectors from EasyList`);
+	} catch (error) {
+		console.error('Failed to load EasyList:', error);
+		// Fallback to basic selectors if EasyList fails to load
+		adSelectors = [
+			'[class*="ad-container"]',
+			'[class*="adsbygoogle"]',
+			'[id*="div-gpt-ad"]',
+			'.advertisement',
+			'iframe[src*="doubleclick.net"]',
+			'iframe[src*="googlesyndication.com"]'
+		];
+	}
+}
+
+// Load the selectors immediately
+loadEasyList();
 
 // Update the message listener to capture sender
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -41,6 +68,22 @@ async function processPageData(data, sender) {
 	const zip = new JSZip();
 	const domainFolder = zip.folder(domain);
 
+	// Get user settings
+	const settings = await new Promise(resolve => {
+		chrome.storage.sync.get({
+			maxResourceSize: 30,
+			maxTotalSize: 120,
+			downloadCss: true,
+			downloadJs: true,
+			downloadImages: true,
+			downloadFonts: true,
+			downloadVideos: true,
+			removeAds: false
+		}, resolve);
+	});
+
+	proxyConsole(tabId, 'log', `Settings loaded: Max Resource: ${settings.maxResourceSize}MB, Remove Ads: ${settings.removeAds}`);
+
 	// Determine the HTML filename based on the URL
 	let htmlFilename = "index.html";
 	try {
@@ -53,14 +96,40 @@ async function processPageData(data, sender) {
 		proxyConsole(tabId, 'warn', "Couldn't parse URL, using index.html as default");
 	}
 
-	// Modify the HTML before adding it to the zip
-	const modifiedHtml = modifyHTML(html);
+	// Process the HTML content
+	let modifiedHtml = html;
+
+	// Save original HTML for reference
+	domainFolder.file("original.html", html);
+
+	// Apply ad removing if enabled
+	if (settings.removeAds && adSelectors) {
+		proxyConsole(tabId, 'log', `Removing ads from HTML using ${adSelectors.length} EasyList selectors...`);
+		try {
+			const startTime = performance.now();
+			// Pass the adSelectors to removeAdsFromHTML
+			modifiedHtml = AdRemover.removeAdsFromHTML(modifiedHtml, adSelectors);
+			const endTime = performance.now();
+			proxyConsole(tabId, 'log', `Ads removed in ${(endTime - startTime).toFixed(2)}ms`);
+		} catch (error) {
+			proxyConsole(tabId, 'error', `Error removing ads: ${error.message}`);
+		}
+	}
+
+	// Apply other HTML modifications
+	modifiedHtml = modifyHTML(modifiedHtml);
+
+	// Save the processed HTML
 	domainFolder.file(htmlFilename, modifiedHtml);
 
+	// Process resources
 	let processedCount = 0;
 	const totalResources = resources.length;
 	chrome.action.setBadgeText({ text: "0%" });
 	chrome.action.setBadgeBackgroundColor({ color: "#4688F1" });
+
+	// Notify content script that download has started
+	chrome.tabs.sendMessage(tabId, { type: 'DOWNLOAD_STARTED' });
 
 	// Load all settings (max sizes and resource type options)
 	chrome.storage.sync.get({
@@ -458,7 +527,7 @@ function modifyHTML(html) {
 		return match;
 	});
 
-	// Handle standalone script tags with src attribute (not self-closing)
+	// Handle standalone script tags with src attribute directly
 	html = html.replace(/<script[^>]*src=["']([^"']+)["'][^>]*>[\s\S]*?<\/script>/gi, function (match, url) {
 		// Skip analytics scripts but don't remove the script tag
 		if (url.includes('googletagmanager.com') || url.includes('clarity.ms')) {
