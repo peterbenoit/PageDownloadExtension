@@ -431,11 +431,11 @@ function modifyHTML(html) {
 		return match;
 	});
 
-	// Replace external JS references with local paths
+	// Replace external JS references with local paths (self-closing script tags)
 	html = html.replace(/<script[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi, function (match, url) {
-		// Skip analytics scripts
+		// Skip analytics scripts but don't remove the script tag
 		if (url.includes('googletagmanager.com') || url.includes('clarity.ms')) {
-			return '';
+			return match;
 		}
 
 		if (!url) return match;
@@ -458,11 +458,11 @@ function modifyHTML(html) {
 		return match;
 	});
 
-	// Add handling for standalone script tags (not just self-closing ones)
+	// Handle standalone script tags with src attribute (not self-closing)
 	html = html.replace(/<script[^>]*src=["']([^"']+)["'][^>]*>[\s\S]*?<\/script>/gi, function (match, url) {
-		// Skip analytics scripts
+		// Skip analytics scripts but don't remove the script tag
 		if (url.includes('googletagmanager.com') || url.includes('clarity.ms')) {
-			return '';
+			return match;
 		}
 
 		if (!url) return match;
@@ -485,8 +485,8 @@ function modifyHTML(html) {
 		return match;
 	});
 
-	// Remove inline scripts that contain "gtag(" or "clarity("
-	html = html.replace(/<script[^>]*>[\s\S]*?(gtag\(|clarity\()[\s\S]*?<\/script>/g, "");
+	// Instead of removing inline scripts that contain certain patterns, just keep them
+	// We only want to modify the resource references, not alter functionality
 
 	// Update favicon links
 	html = html.replace(/<link[^>]*rel=["'](icon|shortcut icon|apple-touch-icon|apple-touch-icon-precomposed)["'][^>]*href=["']([^"']+)["'][^>]*>/gi, function (match, rel, url) {
@@ -508,22 +508,6 @@ function modifyHTML(html) {
 			return match.replace(url, `images/${url}`);
 		}
 		return match;
-	});
-
-	// Update background image paths in inline styles to point to the local images folder
-	html = html.replace(/url\(["']?([^"')]+)["']?\)/g, function (match, p1) {
-		if (p1.startsWith("data:")) return match;
-		if (!p1) return match;
-
-		try {
-			// Extract just the filename without parent directory prefixing
-			const filename = p1.split('/').pop().split('?')[0];
-			return `url('images/${filename}')`;
-		} catch (e) {
-			// If URL parsing fails, use the original approach
-			const filename = p1.split("/").pop().split("?")[0];
-			return `url('images/${filename}')`;
-		}
 	});
 
 	// Replace image src paths with the new naming convention
@@ -571,6 +555,61 @@ function modifyHTML(html) {
 			} else if (!url.startsWith('videos/')) {
 				return match.replace(url, `videos/${url}`);
 			}
+		}
+		return match;
+	});
+
+	// Handle video elements with src attribute directly
+	html = html.replace(/<video[^>]*src=["']([^"']+)["'][^>]*>/gi, function (match, url) {
+		if (!url) return match;
+
+		// Extract filename
+		const filename = url.split('/').pop().split('?')[0];
+
+		// Video files
+		if (url.startsWith('http')) {
+			return match.replace(url, `videos/${filename}`);
+		} else if (url.startsWith('/')) {
+			return match.replace(url, `videos/${filename}`);
+		} else if (!url.startsWith('videos/')) {
+			return match.replace(url, `videos/${url}`);
+		}
+		return match;
+	});
+
+	// Update background image paths in inline styles to point to the local images folder
+	html = html.replace(/url\(["']?([^"')]+)["']?\)/g, function (match, p1) {
+		if (p1.startsWith("data:")) return match;
+		if (!p1) return match;
+
+		try {
+			// Extract just the filename without parent directory prefixing
+			const filename = p1.split('/').pop().split('?')[0];
+			return `url('images/${filename}')`;
+		} catch (e) {
+			// If URL parsing fails, use the original approach
+			const filename = p1.split("/").pop().split("?")[0];
+			return `url('images/${filename}')`;
+		}
+	});
+
+	// Handle any other link tags with href that might be for resources
+	html = html.replace(/<link[^>]*href=["']([^"']+\.(woff2?|ttf|otf|eot|png|jpg|jpeg|gif|svg|webp))["'][^>]*>/gi, function (match, url) {
+		if (!url) return match;
+
+		// Extract filename
+		const filename = url.split('/').pop().split('?')[0];
+
+		// Determine appropriate folder based on file extension
+		let folder = "images"; // Default
+		if (/\.(woff2?|ttf|otf|eot)$/i.test(url)) {
+			folder = "fonts";
+		}
+
+		if (url.startsWith('http') || url.startsWith('/')) {
+			return match.replace(url, `${folder}/${filename}`);
+		} else if (!url.startsWith(`${folder}/`)) {
+			return match.replace(url, `${folder}/${filename}`);
 		}
 		return match;
 	});
